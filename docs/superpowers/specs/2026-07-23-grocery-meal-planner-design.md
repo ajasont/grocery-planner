@@ -218,6 +218,7 @@ Single structured LLM call to Claude Sonnet 4.6.
    - No cuisine repeats more than twice in a week.
    - Do not repeat any meal name from the last 3 weeks (list attached).
    - Meals user rated thumbs-down should not appear; meals rated thumbs-up may be re-suggested.
+   - Respect household preferences: exclude disliked ingredients, disliked cuisines, and dietary flags; bias toward liked ingredients and liked cuisines. Read from `household_preferences`; empty lists are no-ops.
 
 ### Output schema
 
@@ -326,7 +327,12 @@ shopping_list_items      (id, shopping_list_id, canonical_ingredient_id,
                           price, deep_link_url, purchased_at)
 retailer_health          (id, retailer_id, last_success_at, last_status,
                           last_error)
+household_preferences    (id, dietary_flags jsonb, disliked_ingredients jsonb,
+                          liked_ingredients jsonb, disliked_cuisines jsonb,
+                          liked_cuisines jsonb, updated_at)
 ```
+
+`household_preferences` holds a single row for the household. All list fields default to empty JSON arrays in MVP (no active preferences); the meal-planner reads the row every time and enforces its constraints even when empty (a no-op). This means adding a hate-list, dietary rule, or cuisine preference later is a UI-only change — no schema migration and no touching of the meal-planner logic.
 
 Growth: `retailer_skus` grows slowly (thousands, mostly stable after seeding). `deals` grows a few thousand rows per week. `meal_plans`, `meals`, `meal_ingredients` grow by ~30 rows per week. Supabase free-tier limits (500 MB, 2 GB bandwidth) accommodate this for years.
 
@@ -417,6 +423,7 @@ Each week ends in a usable state, even if incomplete.
 
 Not blocking MVP, but worth noting:
 
+- **Preferences editor UI (`/preferences`)** to manage dietary flags, ingredient dislikes/likes, and cuisine preferences. Schema (`household_preferences`) and meal-planner prompt integration are in place from MVP; only the UI needs building.
 - **Instacart integration for Sprouts** if Flipp-only coverage proves insufficient.
 - **Recipe DB fallback (Spoonacular / Edamam)** if pure-LLM recipes prove unreliable over time. The `recipe-engine/` module boundary is designed for this swap.
 - **Meal-prep mode** — a variant weekly flow that biases toward batch-cookable dishes.

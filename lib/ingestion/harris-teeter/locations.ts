@@ -25,7 +25,7 @@ export async function findHarrisTeeterStores(
 ): Promise<HTStore[]> {
   const url = new URL(LOCATIONS_URL);
   url.searchParams.set('filter.zipCode.near', zip);
-  url.searchParams.set('filter.chain', 'HARRISTEETER');
+  url.searchParams.set('filter.chain', 'HART');
   url.searchParams.set('filter.radiusInMiles', String(radiusMiles));
 
   const res = await fetch(url.toString(), {

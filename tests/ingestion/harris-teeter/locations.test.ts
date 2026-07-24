@@ -28,7 +28,7 @@ describe('findHarrisTeeterStores', () => {
 
     // Verify the query params and bearer token
     expect(capturedUrl?.searchParams.get('filter.zipCode.near')).toBe('21224');
-    expect(capturedUrl?.searchParams.get('filter.chain')).toBe('HARRISTEETER');
+    expect(capturedUrl?.searchParams.get('filter.chain')).toBe('HART');
     expect(capturedAuth).toBe('Bearer fake-token');
   });
 

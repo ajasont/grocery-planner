@@ -1,0 +1,26 @@
+{
+  "data": [
+    {
+      "locationId": "09700123",
+      "chain": "HARRISTEETER",
+      "name": "Harris Teeter Locust Point",
+      "address": {
+        "addressLine1": "1801 Whetstone Way",
+        "city": "Baltimore",
+        "state": "MD",
+        "zipCode": "21230"
+      }
+    },
+    {
+      "locationId": "09700456",
+      "chain": "HARRISTEETER",
+      "name": "Harris Teeter Federal Hill",
+      "address": {
+        "addressLine1": "500 E Fort Ave",
+        "city": "Baltimore",
+        "state": "MD",
+        "zipCode": "21230"
+      }
+    }
+  ]
+}

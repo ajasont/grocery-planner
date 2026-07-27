@@ -7,7 +7,10 @@ vi.mock('@/lib/normalization/mapper', () => ({
 }));
 
 // Mock the DB client
-const mockUpsert = vi.fn(async () => ({ error: null }));
+const mockUpdateEq = vi.fn(async () => ({ error: null }));
+const mockUpdate = vi.fn((payload: unknown) => ({
+  eq: (col: string, val: unknown) => mockUpdateEq(payload, col, val),
+}));
 const mockSelect = vi.fn();
 vi.mock('@/lib/db/client', () => ({
   getServerClient: () => ({
@@ -17,7 +20,7 @@ vi.mock('@/lib/db/client', () => ({
           select: () => ({
             is: () => ({ eq: () => mockSelect() }),
           }),
-          upsert: mockUpsert,
+          update: mockUpdate,
         };
       }
       throw new Error('unexpected table ' + table);
@@ -29,7 +32,8 @@ import { runMappingForUnmappedSkus } from '@/lib/normalization/runner';
 
 beforeEach(() => {
   mockMap.mockReset();
-  mockUpsert.mockReset().mockResolvedValue({ error: null });
+  mockUpdate.mockClear();
+  mockUpdateEq.mockReset().mockResolvedValue({ error: null });
   mockSelect.mockReset();
 });
 
@@ -50,14 +54,20 @@ describe('runMappingForUnmappedSkus', () => {
     const result = await runMappingForUnmappedSkus();
 
     expect(mockMap).toHaveBeenCalledWith(['Chicken Breast', 'Baby Spinach']);
-    expect(mockUpsert).toHaveBeenCalledWith(
-      [
-        { id: 1, canonical_ingredient_id: 'chicken_breast', mapping_confidence: 0.95 },
-        { id: 2, canonical_ingredient_id: 'baby_spinach', mapping_confidence: 0.9 },
-      ],
-      { onConflict: 'id' }
+    expect(mockUpdateEq).toHaveBeenCalledTimes(2);
+    expect(mockUpdateEq).toHaveBeenNthCalledWith(
+      1,
+      { canonical_ingredient_id: 'chicken_breast', mapping_confidence: 0.95 },
+      'id',
+      1
     );
-    expect(result).toEqual({ mapped: 2, skipped: 0 });
+    expect(mockUpdateEq).toHaveBeenNthCalledWith(
+      2,
+      { canonical_ingredient_id: 'baby_spinach', mapping_confidence: 0.9 },
+      'id',
+      2
+    );
+    expect(result).toEqual({ mapped: 2, skipped: 0, failed: 0 });
   });
 
   it('skips rows where the mapper returned null canonical_id', async () => {
@@ -69,8 +79,8 @@ describe('runMappingForUnmappedSkus', () => {
 
     const result = await runMappingForUnmappedSkus();
 
-    expect(mockUpsert).not.toHaveBeenCalled();
-    expect(result).toEqual({ mapped: 0, skipped: 1 });
+    expect(mockUpdateEq).not.toHaveBeenCalled();
+    expect(result).toEqual({ mapped: 0, skipped: 1, failed: 0 });
   });
 
   it('returns 0/0 when no unmapped SKUs exist without calling the mapper', async () => {
@@ -79,7 +89,29 @@ describe('runMappingForUnmappedSkus', () => {
     const result = await runMappingForUnmappedSkus();
 
     expect(mockMap).not.toHaveBeenCalled();
-    expect(mockUpsert).not.toHaveBeenCalled();
-    expect(result).toEqual({ mapped: 0, skipped: 0 });
+    expect(mockUpdateEq).not.toHaveBeenCalled();
+    expect(result).toEqual({ mapped: 0, skipped: 0, failed: 0 });
+  });
+
+  it('counts DB update failures without aborting the whole batch', async () => {
+    mockSelect.mockResolvedValueOnce({
+      data: [
+        { id: 1, product_name: 'Chicken Breast' },
+        { id: 2, product_name: 'Baby Spinach' },
+      ],
+      error: null,
+    });
+    mockMap.mockResolvedValueOnce([
+      { canonical_id: 'chicken_breast', confidence: 0.95 },
+      { canonical_id: 'baby_spinach', confidence: 0.9 },
+    ]);
+    mockUpdateEq
+      .mockResolvedValueOnce({ error: { message: 'fk violation' } })
+      .mockResolvedValueOnce({ error: null });
+
+    const result = await runMappingForUnmappedSkus();
+
+    expect(mockUpdateEq).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ mapped: 1, skipped: 0, failed: 1 });
   });
 });

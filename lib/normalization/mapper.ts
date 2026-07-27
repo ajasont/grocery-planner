@@ -37,6 +37,7 @@ export async function mapProductNames(names: string[]): Promise<Mapping[]> {
   if (names.length === 0) return [];
   const canonical = await getCanonicalIngredients();
   const client = getAnthropicClient();
+  const validIds = new Set(canonical.map((c) => c.id));
 
   const results: Mapping[] = new Array(names.length).fill(null).map(() => ({
     canonical_id: null,
@@ -86,7 +87,10 @@ export async function mapProductNames(names: string[]): Promise<Mapping[]> {
     for (const m of mappings) {
       const globalIdx = start + m.index;
       if (globalIdx < 0 || globalIdx >= names.length) continue;
-      const isUnknown = m.canonical_id === 'unknown' || m.canonical_id === '';
+      const isUnknown =
+        m.canonical_id === 'unknown' ||
+        m.canonical_id === '' ||
+        !validIds.has(m.canonical_id);
       results[globalIdx] = {
         canonical_id: isUnknown ? null : m.canonical_id,
         confidence: typeof m.confidence === 'number' ? m.confidence : 0,

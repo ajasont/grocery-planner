@@ -4,6 +4,7 @@ import { mapProductNames } from './mapper';
 export async function runMappingForUnmappedSkus(): Promise<{
   mapped: number;
   skipped: number;
+  failed: number;
 }> {
   const supabase = getServerClient();
 
@@ -15,7 +16,7 @@ export async function runMappingForUnmappedSkus(): Promise<{
     .eq('mapping_verified', false);
   if (error) throw error;
   const rows = (data ?? []) as Array<{ id: number; product_name: string }>;
-  if (rows.length === 0) return { mapped: 0, skipped: 0 };
+  if (rows.length === 0) return { mapped: 0, skipped: 0, failed: 0 };
 
   const mappings = await mapProductNames(rows.map((r) => r.product_name));
 
@@ -38,12 +39,26 @@ export async function runMappingForUnmappedSkus(): Promise<{
     });
   }
 
-  if (updates.length > 0) {
+  let mapped = 0;
+  let failed = 0;
+  for (const u of updates) {
     const { error: upErr } = await supabase
       .from('retailer_skus')
-      .upsert(updates, { onConflict: 'id' });
-    if (upErr) throw upErr;
+      .update({
+        canonical_ingredient_id: u.canonical_ingredient_id,
+        mapping_confidence: u.mapping_confidence,
+      })
+      .eq('id', u.id);
+    if (upErr) {
+      failed++;
+      console.warn(
+        `retailer_skus update failed for id=${u.id} canonical_id=${u.canonical_ingredient_id}:`,
+        upErr
+      );
+      continue;
+    }
+    mapped++;
   }
 
-  return { mapped: updates.length, skipped };
+  return { mapped, skipped, failed };
 }

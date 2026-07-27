@@ -131,6 +131,23 @@ describe('mapProductNames', () => {
     expect(result[24].canonical_id).toBe('yellow_onion');
   });
 
+  it('treats hallucinated canonical_ids not in the canonical list as null', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [
+        {
+          type: 'tool_use',
+          name: 'map_ingredients',
+          input: {
+            mappings: [{ index: 0, canonical_id: 'pasta_fettuccine', confidence: 0.8 }],
+          },
+        },
+      ],
+    });
+
+    const result = await mapProductNames(['Barilla Fettuccine']);
+    expect(result).toEqual([{ canonical_id: null, confidence: 0.8 }]);
+  });
+
   it('returns [] for empty input without calling Haiku', async () => {
     const result = await mapProductNames([]);
     expect(result).toEqual([]);

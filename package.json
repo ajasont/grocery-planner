@@ -9,7 +9,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx seed/run.ts"
+    "seed": "tsx seed/run.ts",
+    "map:unmapped": "tsx scripts/map-unmapped.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

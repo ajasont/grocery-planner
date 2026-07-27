@@ -6,12 +6,10 @@ import searchFixture from './fixtures/search-response.json';
 
 describe('searchFlippMerchant', () => {
   it('sends postal_code and q, and returns the merchant plus its items only', async () => {
+    let capturedUrl: URL | null = null;
     server.use(
       http.get('https://backflipp.wishabi.com/flipp/items/search', ({ request }) => {
-        const url = new URL(request.url);
-        expect(url.searchParams.get('locale')).toBe('en-US');
-        expect(url.searchParams.get('postal_code')).toBe('21224');
-        expect(url.searchParams.get('q')).toBe('Sprouts Farmers Market');
+        capturedUrl = new URL(request.url);
         return HttpResponse.json(searchFixture);
       })
     );
@@ -20,6 +18,11 @@ describe('searchFlippMerchant', () => {
       zip: '21224',
       merchantName: 'Sprouts Farmers Market',
     });
+
+    expect(capturedUrl).not.toBeNull();
+    expect(capturedUrl!.searchParams.get('locale')).toBe('en-US');
+    expect(capturedUrl!.searchParams.get('postal_code')).toBe('21224');
+    expect(capturedUrl!.searchParams.get('q')).toBe('Sprouts Farmers Market');
 
     expect(result.merchant).toEqual({ id: 2419, name: 'Sprouts Farmers Market' });
     expect(result.items).toHaveLength(3);

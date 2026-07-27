@@ -17,10 +17,7 @@ export async function searchFlippMerchant(input: {
 
   const merchants = body.merchants ?? [];
   const wanted = input.merchantName.toLowerCase();
-  const merchant =
-    merchants.find((m) => m.name.toLowerCase() === wanted) ??
-    merchants.find((m) => m.name.toLowerCase().includes(wanted)) ??
-    null;
+  const merchant = merchants.find((m) => m.name.toLowerCase() === wanted) ?? null;
 
   if (!merchant) return { merchant: null, items: [] };
 

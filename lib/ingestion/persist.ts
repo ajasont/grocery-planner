@@ -1,6 +1,5 @@
 import { getServerClient } from '@/lib/db/client';
-import type { NormalizedDeal } from '@/lib/ingestion/types';
-import type { HTStore } from './locations';
+import type { NormalizedDeal, IngestionStore, RetailerName } from './types';
 
 function currentWeekOfISO(): string {
   const now = new Date();
@@ -10,42 +9,52 @@ function currentWeekOfISO(): string {
   return sunday.toISOString().slice(0, 10);
 }
 
-export async function persistHarrisTeeterDeals(input: {
-  stores: HTStore[];
+export async function persistDeals(input: {
+  retailer: RetailerName;
+  stores: IngestionStore[];
   deals: NormalizedDeal[];
-}) {
+}): Promise<{ dealsUpserted: number }> {
   const supabase = getServerClient();
 
   const { data: retailerRow, error: rErr } = await supabase
     .from('retailers')
     .select('id')
-    .eq('name', 'harris-teeter')
+    .eq('name', input.retailer)
     .single();
-  if (rErr || !retailerRow) throw new Error('harris-teeter retailer row missing');
+  if (rErr || !retailerRow) throw new Error(`${input.retailer} retailer row missing`);
   const retailerId = retailerRow.id;
 
   // Upsert stores
-  const storeRows = input.stores.map((s) => ({
-    retailer_id: retailerId,
-    store_number: s.store_number,
-    address: s.address,
-    zip: s.zip,
-    is_active: true,
-  }));
-  const { error: sErr } = await supabase
-    .from('stores')
-    .upsert(storeRows, { onConflict: 'retailer_id,store_number' });
-  if (sErr) throw sErr;
+  if (input.stores.length > 0) {
+    const storeRows = input.stores.map((s) => ({
+      retailer_id: retailerId,
+      store_number: s.store_number,
+      address: s.address,
+      zip: s.zip,
+      is_active: true,
+    }));
+    const { error: sErr } = await supabase
+      .from('stores')
+      .upsert(storeRows, { onConflict: 'retailer_id,store_number' });
+    if (sErr) throw sErr;
+  }
 
   // Reload store IDs
   const { data: storeIdRows, error: sIdErr } = await supabase
     .from('stores')
     .select('id, store_number')
     .eq('retailer_id', retailerId);
-  if (sIdErr || !storeIdRows) throw sIdErr ?? new Error('no stores');
-  const storeIdByNumber = new Map(storeIdRows.map((r) => [r.store_number, r.id]));
+  if (sIdErr) throw sIdErr;
+  const storeIdByNumber = new Map((storeIdRows ?? []).map((r) => [r.store_number, r.id]));
 
-  // Upsert retailer_skus
+  if (input.deals.length === 0) {
+    await touchHealth(supabase, retailerId, 'OK', null);
+    return { dealsUpserted: 0 };
+  }
+
+  // Upsert retailer_skus (do NOT touch canonical_ingredient_id / mapping_* — those are managed
+  // by the normalization runner. Upsert with ignoreDuplicates: false so product_name/image
+  // stay fresh, but the mapping columns default to NULL/false only on INSERT.)
   const skuRows = input.deals.map((d) => ({
     retailer_id: retailerId,
     sku: d.sku,
@@ -66,8 +75,8 @@ export async function persistHarrisTeeterDeals(input: {
     .select('id, sku')
     .eq('retailer_id', retailerId)
     .in('sku', skus);
-  if (skuIdErr || !skuIdRows) throw skuIdErr ?? new Error('no skus');
-  const skuIdByCode = new Map(skuIdRows.map((r) => [r.sku, r.id]));
+  if (skuIdErr) throw skuIdErr;
+  const skuIdByCode = new Map((skuIdRows ?? []).map((r) => [r.sku, r.id]));
 
   // Upsert deals
   const weekOf = currentWeekOfISO();
@@ -95,13 +104,23 @@ export async function persistHarrisTeeterDeals(input: {
     .upsert(dealRows, { onConflict: 'retailer_sku_id,store_id,week_of' });
   if (dErr) throw dErr;
 
-  // Update health
-  await supabase
-    .from('retailer_health')
-    .upsert(
-      { retailer_id: retailerId, last_success_at: new Date().toISOString(), last_status: 'OK', last_error: null },
-      { onConflict: 'retailer_id' }
-    );
-
+  await touchHealth(supabase, retailerId, 'OK', null);
   return { dealsUpserted: dealRows.length };
+}
+
+async function touchHealth(
+  supabase: ReturnType<typeof getServerClient>,
+  retailerId: number,
+  status: 'OK' | 'DEGRADED' | 'FAILED',
+  error: string | null
+) {
+  await supabase.from('retailer_health').upsert(
+    {
+      retailer_id: retailerId,
+      last_success_at: status === 'OK' ? new Date().toISOString() : null,
+      last_status: status,
+      last_error: error,
+    },
+    { onConflict: 'retailer_id' }
+  );
 }

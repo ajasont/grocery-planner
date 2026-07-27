@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import { fetchHarrisTeeterDeals } from '@/lib/ingestion/harris-teeter';
-import { persistHarrisTeeterDeals } from '@/lib/ingestion/harris-teeter/persist';
+import { persistDeals } from '@/lib/ingestion/persist';
 
 const ZIP = '21224';
 
 export async function POST() {
   try {
     const result = await fetchHarrisTeeterDeals(ZIP);
-    const persist = await persistHarrisTeeterDeals(result);
+    const persist = await persistDeals({
+      retailer: 'harris-teeter',
+      stores: result.stores,
+      deals: result.deals,
+    });
     return NextResponse.json({
       ok: true,
       stores: result.stores.length,

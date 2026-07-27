@@ -55,6 +55,7 @@ export async function mapProductNames(names: string[]): Promise<Mapping[]> {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 2048,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tools: [TOOL as any],
       tool_choice: { type: 'tool', name: 'map_ingredients' },
       messages: [
@@ -66,6 +67,7 @@ export async function mapProductNames(names: string[]): Promise<Mapping[]> {
               text: `Canonical ingredient list:\n${canonicalListText}`,
               // Cache the canonical list — it's static across every call in this run.
               cache_control: { type: 'ephemeral' },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any,
             {
               type: 'text',
@@ -76,6 +78,7 @@ export async function mapProductNames(names: string[]): Promise<Mapping[]> {
       ],
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const toolUse = (response.content as any[]).find((b) => b.type === 'tool_use');
     if (!toolUse) continue;
     const mappings = (toolUse.input?.mappings ?? []) as Array<{

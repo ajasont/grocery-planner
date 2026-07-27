@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchHarrisTeeterDeals } from '@/lib/ingestion/harris-teeter';
+import { fetchSproutsDeals } from '@/lib/ingestion/sprouts';
 import { persistDeals } from '@/lib/ingestion/persist';
 import { runMappingForUnmappedSkus } from '@/lib/normalization/runner';
 
@@ -7,9 +7,9 @@ const ZIP = '21224';
 
 export async function POST() {
   try {
-    const result = await fetchHarrisTeeterDeals(ZIP);
+    const result = await fetchSproutsDeals(ZIP);
     const persist = await persistDeals({
-      retailer: 'harris-teeter',
+      retailer: 'sprouts',
       stores: result.stores,
       deals: result.deals,
     });

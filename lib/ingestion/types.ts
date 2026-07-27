@@ -11,3 +11,11 @@ export type NormalizedDeal = {
   on_sale: boolean;
   source: 'api' | 'flipp';
 };
+
+export type IngestionStore = {
+  store_number: string;
+  address: string | null;
+  zip: string | null;
+};
+
+export type RetailerName = NormalizedDeal['retailer'];

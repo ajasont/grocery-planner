@@ -9,9 +9,11 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx seed/run.ts"
+    "seed": "tsx seed/run.ts",
+    "map:unmapped": "tsx scripts/map-unmapped.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@supabase/supabase-js": "^2.110.8",
     "jose": "^6.2.4",
     "next": "14.2.35",

@@ -2,7 +2,7 @@ import { getKrogerAccessToken } from './auth';
 import { findHarrisTeeterStores } from './locations';
 import { searchKrogerProducts } from './products';
 import { normalizeKrogerProducts } from './normalize';
-import type { NormalizedDeal } from '@/lib/ingestion/types';
+import type { NormalizedDeal, IngestionStore } from '@/lib/ingestion/types';
 
 // Broad category search terms — covers most weekly deals in a few calls.
 // We accept some duplicate SKUs across terms; the caller de-dupes by (sku).
@@ -13,7 +13,7 @@ const SEARCH_TERMS = [
 ];
 
 export async function fetchHarrisTeeterDeals(zip: string): Promise<{
-  stores: Array<{ store_number: string; name: string; address: string; zip: string }>;
+  stores: IngestionStore[];
   deals: NormalizedDeal[];
 }> {
   const token = await getKrogerAccessToken();
@@ -43,5 +43,12 @@ export async function fetchHarrisTeeterDeals(zip: string): Promise<{
     }
   }
 
-  return { stores, deals: allDeals };
+  return {
+    stores: stores.map((s) => ({
+      store_number: s.store_number,
+      address: s.address,
+      zip: s.zip,
+    })),
+    deals: allDeals,
+  };
 }

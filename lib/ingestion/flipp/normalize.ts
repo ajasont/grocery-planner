@@ -1,7 +1,7 @@
 import type { NormalizedDeal, RetailerName } from '@/lib/ingestion/types';
 import type { FlippItem } from './types';
 
-const SINGLE_PRICE_RE_G = /\$([\d]+(?:\.[\d]+)?)/g;
+const SINGLE_PRICE_RE_G = /\$[\d]+(?:\.[\d]+)?/g;
 const N_FOR_PRICE_RE = /(\d+)\s*for\s*\$([\d]+(?:\.[\d]+)?)/i;
 const LEADING_QTY_RE = /^\s*(\d+)\s+for\b/i;
 
@@ -26,9 +26,10 @@ function parsePrice(item: FlippItem): number | null {
     const total = parseFloat(nFor[2]);
     if (qty > 0 && total > 0) return Math.round((total / qty) * 100) / 100;
   }
-  const singleMatches = [...text.matchAll(SINGLE_PRICE_RE_G)];
-  if (singleMatches.length > 0) {
-    return parseFloat(singleMatches[singleMatches.length - 1][1]);
+  const singleMatches = text.match(SINGLE_PRICE_RE_G);
+  if (singleMatches && singleMatches.length > 0) {
+    const last = singleMatches[singleMatches.length - 1];
+    return parseFloat(last.slice(1));
   }
   return null;
 }

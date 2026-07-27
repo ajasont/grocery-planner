@@ -16,10 +16,14 @@ function currentWeekOfISO(): string {
   return sunday.toISOString().slice(0, 10);
 }
 
-export async function getCurrentWeekOnSaleDeals(limit = 60): Promise<DealForDisplay[]> {
+export async function getCurrentWeekOnSaleDeals(
+  perRetailer = 30
+): Promise<DealForDisplay[]> {
   const supabase = getServerClient();
   const weekOf = currentWeekOfISO();
 
+  // Fetch all this-week on-sale deals; we top-N per retailer in memory so a
+  // single dense retailer (e.g. HT with 300+ items) can't crowd everyone out.
   const { data, error } = await supabase
     .from('deals')
     .select(
@@ -29,8 +33,7 @@ export async function getCurrentWeekOnSaleDeals(limit = 60): Promise<DealForDisp
     )
     .eq('week_of', weekOf)
     .not('sale_price', 'is', null)
-    .order('sale_price', { ascending: true })
-    .limit(limit);
+    .order('sale_price', { ascending: true });
 
   if (error) throw error;
   if (!data) return [];
@@ -44,11 +47,21 @@ export async function getCurrentWeekOnSaleDeals(limit = 60): Promise<DealForDisp
       retailers: { name: string };
     };
   };
-  return (data as unknown as Row[]).map((row) => ({
-    product_name: row.retailer_skus.product_name,
-    regular_price: row.regular_price,
-    sale_price: row.sale_price,
-    image_url: row.retailer_skus.image_url,
-    retailer_name: row.retailer_skus.retailers.name,
-  }));
+
+  const perRetailerCount = new Map<string, number>();
+  const results: DealForDisplay[] = [];
+  for (const row of data as unknown as Row[]) {
+    const name = row.retailer_skus.retailers.name;
+    const seen = perRetailerCount.get(name) ?? 0;
+    if (seen >= perRetailer) continue;
+    perRetailerCount.set(name, seen + 1);
+    results.push({
+      product_name: row.retailer_skus.product_name,
+      regular_price: row.regular_price,
+      sale_price: row.sale_price,
+      image_url: row.retailer_skus.image_url,
+      retailer_name: name,
+    });
+  }
+  return results;
 }

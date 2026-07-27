@@ -122,4 +122,33 @@ describe('normalizeFlippItems', () => {
     });
     expect(deal.image_url).toBe('https://f.wishabi.net/page_items/3/extra_large.jpg');
   });
+
+  it('returns current_price unchanged when pre_price_text is "1 FOR" (no vacuous division)', () => {
+    const singleFor: FlippItem = {
+      ...base,
+      flyer_item_id: 117,
+      name: 'Single-Unit Special',
+      current_price: 2.99,
+      pre_price_text: '1 FOR',
+    };
+    const [deal] = normalizeFlippItems([singleFor], {
+      retailer: 'sprouts',
+      storeNumber: 'flipp-2419',
+    });
+    expect(deal.sale_price).toBe(2.99);
+  });
+
+  it('picks the last "$X" when sale_story contains multiple dollar amounts', () => {
+    const saveThen: FlippItem = {
+      ...base,
+      flyer_item_id: 118,
+      name: 'Was $X Now $Y',
+      sale_story: 'Save $2, now $1.99',
+    };
+    const [deal] = normalizeFlippItems([saveThen], {
+      retailer: 'sprouts',
+      storeNumber: 'flipp-2419',
+    });
+    expect(deal.sale_price).toBe(1.99);
+  });
 });

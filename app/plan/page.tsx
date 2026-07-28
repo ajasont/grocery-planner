@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import { getCurrentWeekPlan } from '@/lib/meal-planner/read';
+import { DayAccordion } from './DayAccordion';
+import { RegenerateButton } from './RegenerateButton';
+import type { Day } from '@/lib/meal-planner/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +14,19 @@ const ERROR_COPY: Record<string, string> = {
   variety: 'Planner could not vary cuisines enough. Please try again.',
   unknown: 'Something went wrong. Please try again.',
 };
+
+function todayName(): Day {
+  const names: Day[] = [
+    'sunday',
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+  ];
+  return names[new Date().getUTCDay()];
+}
 
 function ErrorBanner({ kind }: { kind: string }) {
   const message = ERROR_COPY[kind] ?? ERROR_COPY.unknown;
@@ -63,20 +79,44 @@ export default async function PlanPage({
     );
   }
 
-  // Populated view — full render lands in Task 12.
+  const today = todayName();
   return (
     <main>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Week of {plan.week_of}</h2>
-        <Link href="/" className="text-sm text-neutral-500 hover:underline">
-          ← Deals
-        </Link>
+        <div className="flex items-center gap-3">
+          <RegenerateButton />
+          <Link href="/" className="text-sm text-neutral-500 hover:underline">
+            ← Deals
+          </Link>
+        </div>
       </div>
       {errorKind && <ErrorBanner kind={errorKind} />}
-      <p className="text-sm text-neutral-500">
-        Plan loaded ({plan.days.length} days, {plan.snacks.length} snacks). Full
-        rendering added in Task 12.
-      </p>
+      <ol className="space-y-2">
+        {plan.days.map((d) => (
+          <li key={d.day}>
+            <DayAccordion
+              day={d}
+              initiallyOpen={d.day === today}
+              isToday={d.day === today}
+            />
+          </li>
+        ))}
+      </ol>
+      {plan.snacks.length > 0 && (
+        <section className="mt-6 rounded border border-amber-200 bg-amber-50 p-3">
+          <h3 className="mb-2 text-sm font-semibold text-amber-900">
+            This week&apos;s snacks
+          </h3>
+          <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {plan.snacks.map((s) => (
+              <li key={s.id} className="text-sm text-amber-900">
+                • {s.name}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </main>
   );
 }

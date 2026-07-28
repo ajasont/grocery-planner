@@ -66,7 +66,7 @@ Constraints:
 - Do not repeat any meal name from the "recent meals to avoid" list.
 - Respect household preferences: honor dietary_flags, exclude disliked ingredients and cuisines, bias toward liked ones.
 - Every ingredient must reference a canonical_id from the "available on sale" or pantry lists (do not invent new IDs).
-- Each meal needs at least 3 ingredients.
+- Breakfast, lunch, and dinner each need at least 3 ingredients. Snacks may have 1–2 (e.g., apple + peanut butter).
 - Return via the generate_meal_plan tool.`;
 
 function renderDeals(deals: PlannerInput['deals']): string {

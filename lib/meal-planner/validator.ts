@@ -66,13 +66,15 @@ export function validate(
   }
   const meals = plan.meals as GeneratedMeal[];
 
-  // Sanity
+  // Sanity — snacks are inherently short (apple + peanut butter), so
+  // ≥3 ingredients only applies to breakfast/lunch/dinner.
   for (const m of meals) {
-    if (m.ingredients.length < 3) {
+    const minIngredients = m.meal_type === 'snack' ? 1 : 3;
+    if (m.ingredients.length < minIngredients) {
       return {
         ok: false,
         kind: 'sanity',
-        reason: `meal "${m.name}" has fewer than 3 ingredients`,
+        reason: `meal "${m.name}" (${m.meal_type}) has fewer than ${minIngredients} ingredients`,
       };
     }
     if (

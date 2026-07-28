@@ -54,8 +54,9 @@ describe('validate', () => {
     if (!result.ok) expect(result.kind).toBe('schema');
   });
 
-  it('rejects a meal with fewer than 3 ingredients (sanity)', () => {
+  it('rejects a non-snack meal with fewer than 3 ingredients (sanity)', () => {
     const meal = makeMeal({
+      meal_type: 'dinner',
       ingredients: [
         { canonical_id: 'chicken_breast', quantity: 1, unit: 'lb' },
         { canonical_id: 'rice', quantity: 1, unit: 'cup' },
@@ -66,6 +67,30 @@ describe('validate', () => {
     if (!result.ok) {
       expect(result.kind).toBe('sanity');
       expect(result.reason).toMatch(/3 ingredients/i);
+    }
+  });
+
+  it('accepts a snack with a single ingredient (sanity)', () => {
+    const meal = makeMeal({
+      meal_type: 'snack',
+      name: 'Apple Slices with Peanut Butter',
+      cook_time_minutes: 5,
+      ingredients: [{ canonical_id: 'chicken_breast', quantity: 1, unit: 'each' }],
+    });
+    const result = validate({ meals: [meal] }, CANONICAL_IDS);
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects a snack with zero ingredients (sanity)', () => {
+    const meal = makeMeal({
+      meal_type: 'snack',
+      ingredients: [],
+    });
+    const result = validate({ meals: [meal] }, CANONICAL_IDS);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.kind).toBe('sanity');
+      expect(result.reason).toMatch(/1 ingredient/i);
     }
   });
 

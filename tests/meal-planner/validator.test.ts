@@ -94,8 +94,26 @@ describe('validate', () => {
     }
   });
 
-  it('rejects a meal with cook time out of [5,120] range (sanity)', () => {
-    const meal = makeMeal({ cook_time_minutes: 3 });
+  it('rejects a non-snack meal with cook time under 5 minutes (sanity)', () => {
+    const meal = makeMeal({ meal_type: 'dinner', cook_time_minutes: 3 });
+    const result = validate({ meals: [meal] }, CANONICAL_IDS);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.kind).toBe('sanity');
+  });
+
+  it('accepts a snack with zero cook time (sanity)', () => {
+    const meal = makeMeal({
+      meal_type: 'snack',
+      name: 'Apple with Peanut Butter',
+      cook_time_minutes: 0,
+      ingredients: [{ canonical_id: 'chicken_breast', quantity: 1, unit: 'each' }],
+    });
+    const result = validate({ meals: [meal] }, CANONICAL_IDS);
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects any meal with cook time over 120 minutes (sanity)', () => {
+    const meal = makeMeal({ meal_type: 'dinner', cook_time_minutes: 150 });
     const result = validate({ meals: [meal] }, CANONICAL_IDS);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.kind).toBe('sanity');

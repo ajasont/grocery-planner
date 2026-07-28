@@ -77,15 +77,15 @@ export function validate(
         reason: `meal "${m.name}" (${m.meal_type}) has fewer than ${minIngredients} ingredients`,
       };
     }
-    if (
-      m.cook_time_minutes !== null &&
-      (m.cook_time_minutes < 5 || m.cook_time_minutes > 120)
-    ) {
-      return {
-        ok: false,
-        kind: 'sanity',
-        reason: `meal "${m.name}" cook time ${m.cook_time_minutes} outside [5,120]`,
-      };
+    if (m.cook_time_minutes !== null) {
+      const minCook = m.meal_type === 'snack' ? 0 : 5;
+      if (m.cook_time_minutes < minCook || m.cook_time_minutes > 120) {
+        return {
+          ok: false,
+          kind: 'sanity',
+          reason: `meal "${m.name}" (${m.meal_type}) cook time ${m.cook_time_minutes} outside [${minCook},120]`,
+        };
+      }
     }
     for (const ing of m.ingredients) {
       if (!canonicalIds.has(ing.canonical_id)) {

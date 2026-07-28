@@ -59,7 +59,8 @@ Your job is to generate a full week of meals from a list of on-sale ingredients.
 
 Constraints:
 - Output exactly 28 meals: 7 breakfast + 7 lunch + 7 dinner + 7 snack. One of each meal_type per day.
-- Weeknight dinners: 30–60 minutes of cook time. Weekend dinners may go longer.
+- Weeknight dinners: 30–60 minutes of cook time. Weekend dinners may go longer (max 120).
+- cook_time_minutes: for breakfast/lunch/dinner, use 5–120. For snacks, use 0 if no cooking is needed.
 - Prefer meals that use ingredients from the "available on sale" list.
 - Prefer well-known named recipes (things a home cook would recognize) over invented dishes.
 - No cuisine may appear more than twice in the week.

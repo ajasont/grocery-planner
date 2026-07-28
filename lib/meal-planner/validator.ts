@@ -9,7 +9,7 @@ export type ValidationResult =
   | { ok: true; plan: GeneratedPlan }
   | { ok: false; kind: 'schema' | 'sanity' | 'variety'; reason: string };
 
-const VALID_DAYS: ReadonlySet<Day> = new Set([
+const VALID_DAYS: ReadonlySet<Day> = new Set<Day>([
   'monday',
   'tuesday',
   'wednesday',
@@ -19,7 +19,7 @@ const VALID_DAYS: ReadonlySet<Day> = new Set([
   'sunday',
 ]);
 
-const VALID_MEAL_TYPES: ReadonlySet<MealType> = new Set([
+const VALID_MEAL_TYPES: ReadonlySet<MealType> = new Set<MealType>([
   'breakfast',
   'lunch',
   'dinner',

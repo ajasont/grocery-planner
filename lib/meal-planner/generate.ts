@@ -89,7 +89,10 @@ export async function generatePlan(
     const second = await callSonnetWithRetry(system, followUp, tool);
     const secondResult = validate(second, canonicalIds, { enforceVariety: false });
     if (secondResult.ok) return secondResult.plan;
-    // Second attempt failed a structural check.
+    // Second attempt failed a structural check (variety is disabled on retry).
+    if (secondResult.kind === 'variety') {
+      throw new Error(`unreachable: variety failure with enforceVariety=false`);
+    }
     throw new ValidationError(secondResult.reason, secondResult.kind);
   }
 

@@ -1,5 +1,7 @@
+import Link from 'next/link';
 import { getCurrentWeekOnSaleDeals } from '@/lib/deals/read';
 import { getRetailerDisplayName } from '@/lib/retailers/display';
+import { getCurrentWeekPlan } from '@/lib/meal-planner/read';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +11,10 @@ function formatPrice(n: number | null): string {
 }
 
 export default async function HomePage() {
-  const groups = await getCurrentWeekOnSaleDeals();
+  const [groups, plan] = await Promise.all([
+    getCurrentWeekOnSaleDeals(),
+    getCurrentWeekPlan(),
+  ]);
 
   return (
     <main>
@@ -21,6 +26,14 @@ export default async function HomePage() {
             : 'No deals loaded yet. Trigger a refresh via /api/admin/refresh-ht or /api/admin/refresh-sprouts.'}
         </p>
       </section>
+      {!plan && (
+        <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          No plan for this week yet —{' '}
+          <Link href="/plan" className="font-medium underline">
+            plan it →
+          </Link>
+        </div>
+      )}
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {groups.map((g) => {
           const primary = g.canonical_name ?? g.sample_product_name;

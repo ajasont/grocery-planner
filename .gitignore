@@ -39,3 +39,6 @@ tests/**/fixtures/*.local.json
 *.tsbuildinfo
 next-env.d.ts
 .env*
+
+# Superpowers brainstorm workspaces (local only)
+.superpowers/

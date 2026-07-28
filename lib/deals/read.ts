@@ -1,19 +1,12 @@
 import { getServerClient } from '@/lib/db/client';
 import { groupDeals, type DealGroup, type GroupInput } from '@/lib/deals/group';
-
-function currentWeekOfISO(): string {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const sunday = new Date(now);
-  sunday.setUTCDate(now.getUTCDate() - day);
-  return sunday.toISOString().slice(0, 10);
-}
+import { getCurrentWeekOfISO } from '@/lib/dates';
 
 export async function getCurrentWeekOnSaleDeals(
   perRetailer = 30
 ): Promise<DealGroup[]> {
   const supabase = getServerClient();
-  const weekOf = currentWeekOfISO();
+  const weekOf = getCurrentWeekOfISO();
 
   const { data, error } = await supabase
     .from('deals')

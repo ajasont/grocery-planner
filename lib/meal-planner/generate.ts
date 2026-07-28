@@ -5,7 +5,6 @@ import {
   AnthropicError,
   JsonParseError,
   ValidationError,
-  VarietyError,
   type GeneratedPlan,
   type PlannerInput,
 } from './types';
@@ -85,14 +84,12 @@ export async function generatePlan(
 
   if (firstResult.kind === 'variety') {
     // One targeted re-prompt with a "reduce cuisine X" instruction.
+    // Per spec: accept the second attempt even if variety is still borderline.
     const followUp = `${userText}\n\nYour previous attempt violated the cuisine variety rule (${firstResult.reason}). Regenerate the full week and ensure no cuisine appears more than twice.`;
     const second = await callSonnetWithRetry(system, followUp, tool);
-    const secondResult = validate(second, canonicalIds);
+    const secondResult = validate(second, canonicalIds, { enforceVariety: false });
     if (secondResult.ok) return secondResult.plan;
-    if (secondResult.kind === 'variety') {
-      throw new VarietyError(secondResult.reason);
-    }
-    // Second attempt failed a different check — fall through to error.
+    // Second attempt failed a structural check.
     throw new ValidationError(secondResult.reason, secondResult.kind);
   }
 

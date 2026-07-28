@@ -49,8 +49,10 @@ function validateMealShape(m: unknown): m is GeneratedMeal {
 
 export function validate(
   plan: unknown,
-  canonicalIds: ReadonlySet<string>
+  canonicalIds: ReadonlySet<string>,
+  opts: { enforceVariety?: boolean } = {}
 ): ValidationResult {
+  const enforceVariety = opts.enforceVariety ?? true;
   // Schema
   if (!isObject(plan) || !Array.isArray(plan.meals)) {
     return { ok: false, kind: 'schema', reason: 'plan.meals must be an array' };
@@ -99,21 +101,24 @@ export function validate(
   }
 
   // Variety
-  const cuisineCounts = new Map<string, number>();
-  for (const m of meals) {
-    if (!m.cuisine) continue;
-    cuisineCounts.set(m.cuisine, (cuisineCounts.get(m.cuisine) ?? 0) + 1);
-  }
-  const overused: string[] = [];
-  cuisineCounts.forEach((count, cuisine) => {
-    if (count > 2) overused.push(cuisine);
-  });
-  if (overused.length > 0) {
-    return {
-      ok: false,
-      kind: 'variety',
-      reason: `cuisine repeated more than twice: ${overused.join(', ')}`,
-    };
+  if (enforceVariety) {
+    const cuisineCounts = new Map<string, number>();
+    for (const m of meals) {
+      if (!m.cuisine) continue;
+      const key = m.cuisine.toLowerCase();
+      cuisineCounts.set(key, (cuisineCounts.get(key) ?? 0) + 1);
+    }
+    const overused: string[] = [];
+    cuisineCounts.forEach((count, cuisine) => {
+      if (count > 2) overused.push(cuisine);
+    });
+    if (overused.length > 0) {
+      return {
+        ok: false,
+        kind: 'variety',
+        reason: `cuisine repeated more than twice: ${overused.join(', ')}`,
+      };
+    }
   }
 
   return { ok: true, plan: { meals } };

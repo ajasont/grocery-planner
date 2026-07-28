@@ -9,7 +9,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 
 import { generatePlan } from '@/lib/meal-planner/generate';
 import type { PlannerInput, GeneratedMeal } from '@/lib/meal-planner/types';
-import { VarietyError, ValidationError, JsonParseError } from '@/lib/meal-planner/types';
+import { ValidationError, JsonParseError } from '@/lib/meal-planner/types';
 
 const CANONICAL_IDS = new Set(['chicken_breast', 'rice', 'yellow_onion']);
 
@@ -101,16 +101,16 @@ describe('generatePlan', () => {
     expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
-  it('throws VarietyError after a second variety failure', async () => {
+  it('accepts a borderline second attempt even if variety still fails', async () => {
     const bad = toolResponse([
       meal({ day: 'monday', cuisine: 'italian' }),
       meal({ day: 'tuesday', cuisine: 'italian' }),
       meal({ day: 'wednesday', cuisine: 'italian' }),
     ]);
     mockCreate.mockResolvedValueOnce(bad).mockResolvedValueOnce(bad);
-    await expect(generatePlan(baseInput(), CANONICAL_IDS)).rejects.toBeInstanceOf(
-      VarietyError
-    );
+    const plan = await generatePlan(baseInput(), CANONICAL_IDS);
+    expect(plan.meals).toHaveLength(3);
+    expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
   it('throws ValidationError on sanity failure without retry', async () => {

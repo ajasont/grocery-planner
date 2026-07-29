@@ -62,6 +62,12 @@ export type GeneratedPlan = {
   meals: GeneratedMeal[];
 };
 
+// Intermediate shape: one meal_type's chunk returned by a single generateMealType call.
+export type GeneratedMealTypeChunk = {
+  mealType: MealType;
+  meals: GeneratedMeal[];
+};
+
 // --- Renderable plan (returned by lib/meal-planner/read.ts) ---
 
 export type RenderableMealIngredient = {

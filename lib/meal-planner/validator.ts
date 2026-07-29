@@ -150,7 +150,8 @@ export function validateVarietyAcrossPlan(
     const key = m.cuisine.toLowerCase();
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  for (const [cuisine, count] of counts) {
+  const entries = Array.from(counts.entries());
+  for (const [cuisine, count] of entries) {
     if (count > 2) {
       return { ok: false, offendingCuisine: cuisine, count };
     }

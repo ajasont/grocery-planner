@@ -68,7 +68,7 @@ function meal(
     day,
     meal_type: mealType,
     name: `${mealType} ${day}`,
-    cuisine: 'american',
+    cuisine: null,
     cook_time_minutes: isSnack ? 0 : 30,
     servings: 2,
     ingredients: isSnack

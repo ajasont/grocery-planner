@@ -150,25 +150,8 @@ export function validateVarietyAcrossPlan(
     const key = m.cuisine.toLowerCase();
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  if (counts.size <= 1) {
-    // Zero or one distinct cuisine — nothing to compare against, no variety violation.
-    return { ok: true };
-  }
-  // Find the most-common cuisine and exclude it from the overuse check.
-  // A cuisine that dominates a single meal-type chunk (e.g., 7/7 dinners are "american")
-  // is expected; what we want to flag is a non-dominant cuisine appearing repeatedly
-  // across the week (e.g., "italian" appearing 5 times while "american" appears 21 times).
-  let dominantCuisine = '';
-  let dominantCount = -1;
   const entries = Array.from(counts.entries());
   for (const [cuisine, count] of entries) {
-    if (count > dominantCount) {
-      dominantCount = count;
-      dominantCuisine = cuisine;
-    }
-  }
-  for (const [cuisine, count] of entries) {
-    if (cuisine === dominantCuisine) continue;
     if (count > 2) {
       return { ok: false, offendingCuisine: cuisine, count };
     }

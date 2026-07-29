@@ -1,13 +1,18 @@
 import type {
   GeneratedMeal,
+  GeneratedMealTypeChunk,
   GeneratedPlan,
   MealType,
   Day,
 } from './types';
 
-export type ValidationResult =
-  | { ok: true; plan: GeneratedPlan }
-  | { ok: false; kind: 'schema' | 'sanity' | 'variety'; reason: string };
+export type ChunkValidationResult =
+  | { ok: true; chunk: GeneratedMealTypeChunk }
+  | { ok: false; kind: 'schema' | 'sanity'; reason: string };
+
+export type VarietyValidationResult =
+  | { ok: true }
+  | { ok: false; offendingCuisine: string; count: number };
 
 const VALID_DAYS: ReadonlySet<Day> = new Set<Day>([
   'monday',
@@ -47,18 +52,18 @@ function validateMealShape(m: unknown): m is GeneratedMeal {
   return true;
 }
 
-export function validate(
-  plan: unknown,
-  canonicalIds: ReadonlySet<string>,
-  opts: { enforceVariety?: boolean } = {}
-): ValidationResult {
-  const enforceVariety = opts.enforceVariety ?? true;
-  // Schema
-  if (!isObject(plan) || !Array.isArray(plan.meals)) {
-    return { ok: false, kind: 'schema', reason: 'plan.meals must be an array' };
+export function validateMealTypeChunk(
+  input: unknown,
+  expectedMealType: MealType,
+  canonicalIds: ReadonlySet<string>
+): ChunkValidationResult {
+  // Schema: input shape.
+  if (!isObject(input) || !Array.isArray(input.meals)) {
+    return { ok: false, kind: 'schema', reason: 'chunk.meals must be an array' };
   }
-  for (let i = 0; i < plan.meals.length; i++) {
-    if (!validateMealShape(plan.meals[i])) {
+  const meals = input.meals;
+  for (let i = 0; i < meals.length; i++) {
+    if (!validateMealShape(meals[i])) {
       return {
         ok: false,
         kind: 'schema',
@@ -66,11 +71,41 @@ export function validate(
       };
     }
   }
-  const meals = plan.meals as GeneratedMeal[];
+  const typed = meals as GeneratedMeal[];
 
-  // Sanity — snacks are inherently short (apple + peanut butter), so
-  // ≥3 ingredients only applies to breakfast/lunch/dinner.
-  for (const m of meals) {
+  // Sanity: day coverage — exactly one meal per day.
+  if (typed.length !== 7) {
+    return {
+      ok: false,
+      kind: 'sanity',
+      reason: `expected 7 meals for ${expectedMealType} chunk, got ${typed.length}`,
+    };
+  }
+  const seenDays = new Set<Day>();
+  for (const m of typed) {
+    if (seenDays.has(m.day)) {
+      return {
+        ok: false,
+        kind: 'sanity',
+        reason: `duplicate day "${m.day}" in ${expectedMealType} chunk`,
+      };
+    }
+    seenDays.add(m.day);
+  }
+
+  // Sanity: meal_type consistency.
+  for (const m of typed) {
+    if (m.meal_type !== expectedMealType) {
+      return {
+        ok: false,
+        kind: 'sanity',
+        reason: `meal "${m.name}" has meal_type "${m.meal_type}", expected "${expectedMealType}"`,
+      };
+    }
+  }
+
+  // Sanity: ingredient counts, cook time bounds, canonical ID membership.
+  for (const m of typed) {
     const minIngredients = m.meal_type === 'snack' ? 1 : 3;
     if (m.ingredients.length < minIngredients) {
       return {
@@ -100,26 +135,25 @@ export function validate(
     }
   }
 
-  // Variety
-  if (enforceVariety) {
-    const cuisineCounts = new Map<string, number>();
-    for (const m of meals) {
-      if (!m.cuisine) continue;
-      const key = m.cuisine.toLowerCase();
-      cuisineCounts.set(key, (cuisineCounts.get(key) ?? 0) + 1);
-    }
-    const overused: string[] = [];
-    cuisineCounts.forEach((count, cuisine) => {
-      if (count > 2) overused.push(cuisine);
-    });
-    if (overused.length > 0) {
-      return {
-        ok: false,
-        kind: 'variety',
-        reason: `cuisine repeated more than twice: ${overused.join(', ')}`,
-      };
+  return {
+    ok: true,
+    chunk: { mealType: expectedMealType, meals: typed },
+  };
+}
+
+export function validateVarietyAcrossPlan(
+  plan: GeneratedPlan
+): VarietyValidationResult {
+  const counts = new Map<string, number>();
+  for (const m of plan.meals) {
+    if (!m.cuisine) continue;
+    const key = m.cuisine.toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  for (const [cuisine, count] of counts) {
+    if (count > 2) {
+      return { ok: false, offendingCuisine: cuisine, count };
     }
   }
-
-  return { ok: true, plan: { meals } };
+  return { ok: true };
 }

@@ -23,17 +23,17 @@ function mealTypeConstraints(mealType: MealType): string {
 }
 
 function buildSystemPrompt(mealType: MealType): string {
-  return `You are a meal planner for a household of 2 adults in Baltimore. \
-Generate the ${mealType} slot of a weekly meal plan from a list of on-sale ingredients.
+  return `You are a meal planner for a household of 2 adults in Baltimore. Generate the ${mealType} slot of a weekly meal plan from a list of on-sale ingredients.
+
+CRITICAL — canonical_id whitelist. Every ingredient MUST reference a canonical_id that appears verbatim in the "Available on sale" or "Pantry" lists in the user turn. Do NOT invent, guess, or infer IDs (e.g. "jasmine_rice" when only "rice" is listed, or "parmesan_cheese" when no cheese is listed). If a recipe would need an ingredient that isn't in either list, pick a DIFFERENT recipe. Any invented canonical_id causes the entire response to be rejected.
 
 Constraints for this ${mealType} chunk:
 ${mealTypeConstraints(mealType)}
 
-Constraints that apply to the full week (they will be validated after all four meal-type chunks are merged, so respect them here):
+Constraints that apply to the full week (validated after all four chunks are merged):
 - No cuisine may appear more than twice across the week.
 - Prefer well-known named recipes (dishes a home cook would recognize) over invented ones.
 - Prefer meals that use ingredients from the "available on sale" list.
-- Every ingredient must reference a canonical_id from the "available on sale" or pantry lists (do not invent new IDs).
 - Do not repeat any meal name from the "recent meals to avoid" list.
 - Respect household preferences: honor dietary_flags, exclude disliked ingredients and cuisines, bias toward liked ones.
 

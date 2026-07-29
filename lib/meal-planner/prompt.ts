@@ -1,74 +1,101 @@
-import type { PlannerInput } from './types';
+import type { MealType, PlannerInput } from './types';
 
-export const GENERATE_TOOL = {
-  name: 'generate_meal_plan',
-  description:
-    'Emit the full 21-meal weekly plan: 7 breakfast, 7 lunch, 7 dinner, and 7 snacks (one per day).',
-  input_schema: {
-    type: 'object',
-    properties: {
-      meals: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            day: {
-              type: 'string',
-              enum: [
-                'monday',
-                'tuesday',
-                'wednesday',
-                'thursday',
-                'friday',
-                'saturday',
-                'sunday',
-              ],
-            },
-            meal_type: {
-              type: 'string',
-              enum: ['breakfast', 'lunch', 'dinner', 'snack'],
-            },
-            name: { type: 'string' },
-            cuisine: { type: ['string', 'null'] },
-            cook_time_minutes: { type: ['integer', 'null'] },
-            servings: { type: ['integer', 'null'] },
-            ingredients: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  canonical_id: { type: 'string' },
-                  quantity: { type: ['number', 'null'] },
-                  unit: { type: ['string', 'null'] },
-                },
-                required: ['canonical_id'],
-              },
-            },
-            notes: { type: ['string', 'null'] },
-          },
-          required: ['day', 'meal_type', 'name', 'ingredients'],
-        },
-      },
-    },
-    required: ['meals'],
-  },
-} as const;
+function mealTypeConstraints(mealType: MealType): string {
+  switch (mealType) {
+    case 'breakfast':
+      return `- Output exactly 7 breakfasts, one per day (monday through sunday). No day may repeat.
+- Each breakfast needs at least 3 ingredients.
+- cook_time_minutes: 5-120.`;
+    case 'lunch':
+      return `- Output exactly 7 lunches, one per day (monday through sunday). No day may repeat.
+- Each lunch needs at least 3 ingredients.
+- cook_time_minutes: 5-120.`;
+    case 'dinner':
+      return `- Output exactly 7 dinners, one per day (monday through sunday). No day may repeat.
+- Each dinner needs at least 3 ingredients.
+- Weeknight dinners (mon-fri): 30-60 minutes of cook time. Weekend dinners (sat, sun) may go longer, up to 120.
+- cook_time_minutes: 5-120.`;
+    case 'snack':
+      return `- Output exactly 7 snacks, one per day (monday through sunday). No day may repeat.
+- Snacks may have 1-2 ingredients (e.g., apple + peanut butter).
+- cook_time_minutes: 0 if no cooking is needed, otherwise up to 120.`;
+  }
+}
 
-const SYSTEM_PROMPT = `You are a meal planner for a household of 2 adults in Baltimore. \
-Your job is to generate a full week of meals from a list of on-sale ingredients.
+function buildSystemPrompt(mealType: MealType): string {
+  return `You are a meal planner for a household of 2 adults in Baltimore. \
+Generate the ${mealType} slot of a weekly meal plan from a list of on-sale ingredients.
 
-Constraints:
-- Output exactly 28 meals: 7 breakfast + 7 lunch + 7 dinner + 7 snack. One of each meal_type per day.
-- Weeknight dinners: 30–60 minutes of cook time. Weekend dinners may go longer (max 120).
-- cook_time_minutes: for breakfast/lunch/dinner, use 5–120. For snacks, use 0 if no cooking is needed.
+Constraints for this ${mealType} chunk:
+${mealTypeConstraints(mealType)}
+
+Constraints that apply to the full week (they will be validated after all four meal-type chunks are merged, so respect them here):
+- No cuisine may appear more than twice across the week.
+- Prefer well-known named recipes (dishes a home cook would recognize) over invented ones.
 - Prefer meals that use ingredients from the "available on sale" list.
-- Prefer well-known named recipes (things a home cook would recognize) over invented dishes.
-- No cuisine may appear more than twice in the week.
+- Every ingredient must reference a canonical_id from the "available on sale" or pantry lists (do not invent new IDs).
 - Do not repeat any meal name from the "recent meals to avoid" list.
 - Respect household preferences: honor dietary_flags, exclude disliked ingredients and cuisines, bias toward liked ones.
-- Every ingredient must reference a canonical_id from the "available on sale" or pantry lists (do not invent new IDs).
-- Breakfast, lunch, and dinner each need at least 3 ingredients. Snacks may have 1–2 (e.g., apple + peanut butter).
-- Return via the generate_meal_plan tool.`;
+
+Return the 7 ${mealType} meals via the generate_meal_plan tool.`;
+}
+
+function buildTool(mealType: MealType) {
+  return {
+    name: 'generate_meal_plan',
+    description: `Emit the 7 ${mealType} meals for the week (one per day).`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        meals: {
+          type: 'array' as const,
+          minItems: 7,
+          maxItems: 7,
+          items: {
+            type: 'object' as const,
+            properties: {
+              day: {
+                type: 'string' as const,
+                enum: [
+                  'monday',
+                  'tuesday',
+                  'wednesday',
+                  'thursday',
+                  'friday',
+                  'saturday',
+                  'sunday',
+                ],
+              },
+              meal_type: {
+                type: 'string' as const,
+                enum: [mealType],
+              },
+              name: { type: 'string' as const },
+              cuisine: { type: ['string', 'null'] as const },
+              cook_time_minutes: { type: ['integer', 'null'] as const },
+              servings: { type: ['integer', 'null'] as const },
+              ingredients: {
+                type: 'array' as const,
+                items: {
+                  type: 'object' as const,
+                  properties: {
+                    canonical_id: { type: 'string' as const },
+                    quantity: { type: ['number', 'null'] as const },
+                    unit: { type: ['string', 'null'] as const },
+                  },
+                  required: ['canonical_id'],
+                },
+              },
+              notes: { type: ['string', 'null'] as const },
+            },
+            required: ['day', 'meal_type', 'name', 'ingredients'],
+          },
+        },
+      },
+      required: ['meals'],
+    },
+  };
+}
 
 function renderDeals(deals: PlannerInput['deals']): string {
   if (deals.length === 0) return '(none — no deals loaded this week)';
@@ -105,12 +132,18 @@ function renderPreferences(prefs: PlannerInput['preferences']): string {
   return parts.length > 0 ? parts.join('\n') : '(no preferences set)';
 }
 
-export function buildPrompt(input: PlannerInput): {
+export type BuiltPrompt = {
   system: string;
   userText: string;
-  tool: typeof GENERATE_TOOL;
-} {
-  const userText = [
+  tool: ReturnType<typeof buildTool>;
+};
+
+export function buildMealTypePrompt(
+  mealType: MealType,
+  input: PlannerInput,
+  extraUserInstructions?: string
+): BuiltPrompt {
+  const userTextParts = [
     'Available on sale this week:',
     renderDeals(input.deals),
     '',
@@ -123,8 +156,14 @@ export function buildPrompt(input: PlannerInput): {
     'Recent meals to avoid (last 3 weeks):',
     renderPriorMeals(input.prior_meal_names),
     '',
-    'Generate the full week now via the generate_meal_plan tool.',
-  ].join('\n');
-
-  return { system: SYSTEM_PROMPT, userText, tool: GENERATE_TOOL };
+    `Generate the 7 ${mealType} meals now via the generate_meal_plan tool.`,
+  ];
+  if (extraUserInstructions && extraUserInstructions.length > 0) {
+    userTextParts.push('', extraUserInstructions);
+  }
+  return {
+    system: buildSystemPrompt(mealType),
+    userText: userTextParts.join('\n'),
+    tool: buildTool(mealType),
+  };
 }

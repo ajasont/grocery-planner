@@ -3,21 +3,26 @@ import type { GeneratedPlan } from './types';
 
 export async function savePlan(
   plan: GeneratedPlan,
-  weekOf: string
+  weekOf: string,
+  pantryCanonicalIds: string[]
 ): Promise<{ mealPlanId: number }> {
   const supabase = getServerClient();
 
-  // 1. Delete any existing plan for the same week (cascades to meals + meal_ingredients).
+  // 1. Delete any existing plan for the same week (cascades to meals + meal_ingredients + shopping_list_checks).
   const { error: delErr } = await supabase
     .from('meal_plans')
     .delete()
     .eq('week_of', weekOf);
   if (delErr) throw delErr;
 
-  // 2. Insert the new meal_plans row.
+  // 2. Insert the new meal_plans row with the pantry snapshot.
   const { data: mpRow, error: mpErr } = await supabase
     .from('meal_plans')
-    .insert({ week_of: weekOf, status: 'draft' })
+    .insert({
+      week_of: weekOf,
+      status: 'draft',
+      pantry_canonical_ingredient_ids: pantryCanonicalIds,
+    })
     .select('id')
     .single();
   if (mpErr || !mpRow) throw mpErr ?? new Error('meal_plans insert returned no row');

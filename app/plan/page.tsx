@@ -86,6 +86,12 @@ export default async function PlanPage({
         <h2 className="text-lg font-semibold">Week of {plan.week_of}</h2>
         <div className="flex items-center gap-3">
           <RegenerateButton />
+          <Link
+            href="/plan/shopping-list"
+            className="text-sm text-neutral-500 hover:underline"
+          >
+            Shopping list
+          </Link>
           <Link href="/" className="text-sm text-neutral-500 hover:underline">
             ← Deals
           </Link>

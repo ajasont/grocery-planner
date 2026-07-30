@@ -82,17 +82,30 @@ async function generateMealType(
   canonicalIds: ReadonlySet<string>,
   extraUserInstructions?: string
 ): Promise<GeneratedMealTypeChunk> {
-  const { system, userText, tool } = buildMealTypePrompt(
-    mealType,
-    input,
-    extraUserInstructions
-  );
-  const raw = await callHaikuWithRetry(system, userText, tool);
-  const result = validateMealTypeChunk(raw, mealType, canonicalIds);
-  if (!result.ok) {
-    throw new ValidationError(result.reason, result.kind);
+  const first = buildMealTypePrompt(mealType, input, extraUserInstructions);
+  const rawFirst = await callHaikuWithRetry(first.system, first.userText, first.tool);
+  const firstResult = validateMealTypeChunk(rawFirst, mealType, canonicalIds);
+  if (firstResult.ok) return firstResult.chunk;
+
+  // Validation failed — retry once with a targeted repair message that quotes
+  // the validator's reason. The most common cause is Haiku hallucinating a
+  // canonical_id that isn't in the on-sale/pantry lists.
+  const repairBlock = `Your previous attempt for the ${mealType} chunk was rejected. Reason: ${firstResult.reason}
+
+If the reason mentions "unknown canonical_id", every ingredient MUST reference a canonical_id copied verbatim from the "Available on sale" or "Pantry" lists above. Do NOT invent, guess, or infer IDs. If a recipe would need an ingredient that isn't in either list, pick a DIFFERENT recipe.
+
+Otherwise, address the reason directly. Return exactly 7 ${mealType} meals via the generate_meal_plan tool.`;
+
+  const combinedInstructions = extraUserInstructions
+    ? `${extraUserInstructions}\n\n${repairBlock}`
+    : repairBlock;
+  const retry = buildMealTypePrompt(mealType, input, combinedInstructions);
+  const rawRetry = await callHaikuWithRetry(retry.system, retry.userText, retry.tool);
+  const retryResult = validateMealTypeChunk(rawRetry, mealType, canonicalIds);
+  if (!retryResult.ok) {
+    throw new ValidationError(retryResult.reason, retryResult.kind);
   }
-  return result.chunk;
+  return retryResult.chunk;
 }
 
 function mergeChunks(chunks: GeneratedMealTypeChunk[]): GeneratedPlan {

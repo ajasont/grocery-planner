@@ -308,3 +308,115 @@ describe('generatePlan — variety repair', () => {
     );
   });
 });
+
+describe('generatePlan — per-chunk sanity retry', () => {
+  it('retries a chunk once when it fails sanity, then succeeds', async () => {
+    let breakfastCallCount = 0;
+    mockCreate.mockImplementation(async (req) => {
+      const sys = (req as { system: Array<{ text: string }> }).system[0].text;
+      const mealType = (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).find(
+        (t) => sys.includes(`${t} slot`) || sys.includes(`${t} chunk`)
+      )!;
+      if (mealType === 'breakfast') {
+        breakfastCallCount++;
+        if (breakfastCallCount === 1) {
+          // First attempt: valid shape, but one meal references an
+          // unknown canonical_id ("whole_milk" is not in CANONICAL_IDS).
+          return fullChunk('breakfast', (_d, i) =>
+            i === 0
+              ? {
+                  ingredients: [
+                    { canonical_id: 'oats', quantity: 1, unit: 'cup' },
+                    { canonical_id: 'apple', quantity: 1, unit: 'each' },
+                    { canonical_id: 'whole_milk', quantity: 0.5, unit: 'cup' },
+                  ],
+                }
+              : {}
+          );
+        }
+        // Retry: all valid.
+        return fullChunk('breakfast');
+      }
+      return fullChunk(mealType);
+    });
+
+    const plan = await generatePlan(baseInput(), CANONICAL_IDS);
+
+    expect(plan.meals).toHaveLength(28);
+    expect(breakfastCallCount).toBe(2);
+    // 3 other meal types (1 each) + 2 breakfast calls = 5.
+    expect(mockCreate).toHaveBeenCalledTimes(5);
+  });
+
+  it('throws ValidationError when both attempts on the same chunk fail sanity', async () => {
+    mockCreate.mockImplementation(async (req) => {
+      const sys = (req as { system: Array<{ text: string }> }).system[0].text;
+      const mealType = (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).find(
+        (t) => sys.includes(`${t} slot`) || sys.includes(`${t} chunk`)
+      )!;
+      if (mealType === 'breakfast') {
+        // Every attempt returns the same unknown canonical_id.
+        return fullChunk('breakfast', (_d, i) =>
+          i === 0
+            ? {
+                ingredients: [
+                  { canonical_id: 'oats', quantity: 1, unit: 'cup' },
+                  { canonical_id: 'apple', quantity: 1, unit: 'each' },
+                  { canonical_id: 'whole_milk', quantity: 0.5, unit: 'cup' },
+                ],
+              }
+            : {}
+        );
+      }
+      return fullChunk(mealType);
+    });
+
+    await expect(generatePlan(baseInput(), CANONICAL_IDS)).rejects.toBeInstanceOf(
+      ValidationError
+    );
+  });
+
+  it('retry user prompt quotes the validator reason and reminds about the canonical_id whitelist', async () => {
+    let breakfastCallCount = 0;
+    let retryUserText = '';
+    mockCreate.mockImplementation(async (req) => {
+      const typedReq = req as {
+        system: Array<{ text: string }>;
+        messages: Array<{ role: string; content: string }>;
+      };
+      const sys = typedReq.system[0].text;
+      const mealType = (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).find(
+        (t) => sys.includes(`${t} slot`) || sys.includes(`${t} chunk`)
+      )!;
+      if (mealType === 'breakfast') {
+        breakfastCallCount++;
+        if (breakfastCallCount === 1) {
+          return fullChunk('breakfast', (_d, i) =>
+            i === 0
+              ? {
+                  ingredients: [
+                    { canonical_id: 'oats', quantity: 1, unit: 'cup' },
+                    { canonical_id: 'apple', quantity: 1, unit: 'each' },
+                    { canonical_id: 'whole_milk', quantity: 0.5, unit: 'cup' },
+                  ],
+                }
+              : {}
+          );
+        }
+        retryUserText = typedReq.messages[0].content;
+        return fullChunk('breakfast');
+      }
+      return fullChunk(mealType);
+    });
+
+    await generatePlan(baseInput(), CANONICAL_IDS);
+
+    // The retry prompt must include:
+    // (a) the specific offending canonical_id from the validator reason,
+    expect(retryUserText).toMatch(/whole_milk/);
+    // (b) an "unknown canonical_id" marker (validator wording),
+    expect(retryUserText).toMatch(/unknown canonical_id/i);
+    // (c) a reminder pointing back to the on-sale / pantry lists.
+    expect(retryUserText).toMatch(/on sale/i);
+  });
+});

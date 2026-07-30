@@ -36,7 +36,8 @@ export async function POST(request: Request) {
 
     const input = await getPlannerInput();
     const plan = await generatePlan(input, canonicalIds);
-    await savePlan(plan, getCurrentWeekOfISO());
+    const pantryCanonicalIds = input.pantry.map((p) => p.canonical_id);
+    await savePlan(plan, getCurrentWeekOfISO(), pantryCanonicalIds);
     return redirect('/plan');
   } catch (err) {
     console.error('POST /api/plan/generate failed:', err);

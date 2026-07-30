@@ -1,5 +1,4 @@
 import { getServerClient } from '@/lib/db/client';
-import { getCurrentWeekOfISO } from '@/lib/dates';
 
 export type ShoppingListInputs = {
   planId: number;
@@ -172,16 +171,7 @@ export async function buildShoppingList(planId: number): Promise<ShoppingList> {
     throw planErr ?? new Error(`meal_plans row not found for id=${planId}`);
   }
 
-  // 2. Ingredients across every meal in this plan (breakfast/lunch/dinner + snacks).
-  const { data: ingRows, error: ingErr } = await supabase
-    .from('meals')
-    .select(
-      `id,
-       meal_ingredients (canonical_ingredient_id, quantity, unit,
-         canonical_ingredients (name))`
-    )
-    .eq('meal_plan_id', planId);
-  if (ingErr) throw ingErr;
+  const weekOf = planRow.week_of as string;
 
   type MealRow = {
     id: number;
@@ -192,6 +182,45 @@ export async function buildShoppingList(planId: number): Promise<ShoppingList> {
       canonical_ingredients: { name: string } | null;
     }>;
   };
+  type DealRow = {
+    sale_price: number | null;
+    regular_price: number | null;
+    retailer_skus: {
+      canonical_ingredient_id: string | null;
+      retailers: { name: string };
+    };
+  };
+
+  // 2–4. Ingredients, deals, and checks are all independent — fetch in parallel.
+  const [ingResult, dealResult, checkResult] = await Promise.all([
+    supabase
+      .from('meals')
+      .select(
+        `id,
+         meal_ingredients (canonical_ingredient_id, quantity, unit,
+           canonical_ingredients (name))`
+      )
+      .eq('meal_plan_id', planId),
+    supabase
+      .from('deals')
+      .select(
+        `sale_price, regular_price,
+         retailer_skus!inner (canonical_ingredient_id,
+           retailers!inner (name))`
+      )
+      .eq('week_of', weekOf),
+    supabase
+      .from('shopping_list_checks')
+      .select('canonical_ingredient_id')
+      .eq('meal_plan_id', planId),
+  ]);
+  if (ingResult.error) throw ingResult.error;
+  if (dealResult.error) throw dealResult.error;
+  if (checkResult.error) throw checkResult.error;
+  const ingRows = ingResult.data;
+  const dealRows = dealResult.data;
+  const checkRows = checkResult.data;
+
   const ingredients = ((ingRows ?? []) as unknown as MealRow[]).flatMap((meal) =>
     (meal.meal_ingredients ?? []).map((ing) => ({
       canonicalId: ing.canonical_ingredient_id,
@@ -201,28 +230,6 @@ export async function buildShoppingList(planId: number): Promise<ShoppingList> {
     }))
   );
 
-  // 3. Deals for the current week — include rows with null sale_price so we
-  //    can compute grandTotalAll from regular_price. This is why we don't
-  //    reuse getCurrentWeekOnSaleDeals (which filters non-sale rows out).
-  const weekOf = getCurrentWeekOfISO();
-  const { data: dealRows, error: dealErr } = await supabase
-    .from('deals')
-    .select(
-      `sale_price, regular_price,
-       retailer_skus!inner (canonical_ingredient_id,
-         retailers!inner (name))`
-    )
-    .eq('week_of', weekOf);
-  if (dealErr) throw dealErr;
-
-  type DealRow = {
-    sale_price: number | null;
-    regular_price: number | null;
-    retailer_skus: {
-      canonical_ingredient_id: string | null;
-      retailers: { name: string };
-    };
-  };
   const deals = ((dealRows ?? []) as unknown as DealRow[])
     .filter((r) => r.retailer_skus.canonical_ingredient_id !== null)
     .map((r) => ({
@@ -232,12 +239,6 @@ export async function buildShoppingList(planId: number): Promise<ShoppingList> {
       regularPrice: r.regular_price,
     }));
 
-  // 4. Checked canonical_ids for this plan.
-  const { data: checkRows, error: checkErr } = await supabase
-    .from('shopping_list_checks')
-    .select('canonical_ingredient_id')
-    .eq('meal_plan_id', planId);
-  if (checkErr) throw checkErr;
   const checkedCanonicalIds = new Set(
     ((checkRows ?? []) as Array<{ canonical_ingredient_id: string }>).map(
       (r) => r.canonical_ingredient_id
@@ -246,7 +247,7 @@ export async function buildShoppingList(planId: number): Promise<ShoppingList> {
 
   return buildShoppingListFromRows({
     planId,
-    weekOf: planRow.week_of as string,
+    weekOf,
     pantryCanonicalIds:
       (planRow.pantry_canonical_ingredient_ids as string[] | null) ?? [],
     ingredients,

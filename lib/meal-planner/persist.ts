@@ -8,7 +8,7 @@ export async function savePlan(
 ): Promise<{ mealPlanId: number }> {
   const supabase = getServerClient();
 
-  // 1. Delete any existing plan for the same week (cascades to meals + meal_ingredients).
+  // 1. Delete any existing plan for the same week (cascades to meals + meal_ingredients + shopping_list_checks).
   const { error: delErr } = await supabase
     .from('meal_plans')
     .delete()

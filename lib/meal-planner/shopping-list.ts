@@ -158,20 +158,16 @@ export function buildShoppingListFromRows(inputs: ShoppingListInputs): ShoppingL
   };
 }
 
-export async function buildShoppingList(planId: number): Promise<ShoppingList> {
+export type PlanRow = {
+  id: number;
+  week_of: string;
+  pantry_canonical_ingredient_ids: string[] | null;
+};
+
+export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
   const supabase = getServerClient();
-
-  // 1. Plan row (week_of + pantry snapshot).
-  const { data: planRow, error: planErr } = await supabase
-    .from('meal_plans')
-    .select('id, week_of, pantry_canonical_ingredient_ids')
-    .eq('id', planId)
-    .single();
-  if (planErr || !planRow) {
-    throw planErr ?? new Error(`meal_plans row not found for id=${planId}`);
-  }
-
-  const weekOf = planRow.week_of as string;
+  const planId = plan.id;
+  const weekOf = plan.week_of;
 
   type MealRow = {
     id: number;
@@ -248,8 +244,7 @@ export async function buildShoppingList(planId: number): Promise<ShoppingList> {
   return buildShoppingListFromRows({
     planId,
     weekOf,
-    pantryCanonicalIds:
-      (planRow.pantry_canonical_ingredient_ids as string[] | null) ?? [],
+    pantryCanonicalIds: plan.pantry_canonical_ingredient_ids ?? [],
     ingredients,
     deals,
     checkedCanonicalIds,

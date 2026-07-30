@@ -21,7 +21,7 @@ export default async function ShoppingListPage() {
 
   const { data: planRow } = await supabase
     .from('meal_plans')
-    .select('id')
+    .select('id, week_of, pantry_canonical_ingredient_ids')
     .eq('week_of', weekOf)
     .maybeSingle();
 
@@ -30,7 +30,7 @@ export default async function ShoppingListPage() {
     redirect('/plan');
   }
 
-  const list = await buildShoppingList(planRow.id as number);
+  const list = await buildShoppingList(planRow);
 
   return (
     <main className="max-w-2xl mx-auto p-6">
@@ -52,7 +52,7 @@ export default async function ShoppingListPage() {
       </header>
 
       {list.sections.length === 0 ? (
-        <p className="text-gray-500">Nothing to buy — every ingredient is in your pantry.</p>
+        <p className="text-gray-500">No items to buy for this week's plan.</p>
       ) : (
         list.sections.map((section) => (
           <section key={section.retailer} className="mb-6">

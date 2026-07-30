@@ -419,4 +419,54 @@ describe('generatePlan — per-chunk sanity retry', () => {
     // (c) a reminder pointing back to the on-sale / pantry lists.
     expect(retryUserText).toMatch(/on sale/i);
   });
+
+  it('recovers when a variety-repair chunk fails sanity on first try', async () => {
+    // Stacked path: variety repair fires, the repair chunk itself hallucinates
+    // a canonical_id, then the sanity retry inside generateMealType saves it.
+    let dinnerCallCount = 0;
+    mockCreate.mockImplementation(async (req) => {
+      const sys = (req as { system: Array<{ text: string }> }).system[0].text;
+      const mealType = (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).find(
+        (t) => sys.includes(`${t} slot`) || sys.includes(`${t} chunk`)
+      )!;
+      if (mealType === 'dinner') {
+        dinnerCallCount++;
+        if (dinnerCallCount === 1) {
+          // Initial: 5 italian dinners → triggers variety repair.
+          return fullChunk('dinner', (_d, i) => ({
+            cuisine: i < 5 ? 'italian' : 'thai',
+          }));
+        }
+        if (dinnerCallCount === 2) {
+          // Variety-repair chunk: clean cuisines, but one meal has an
+          // unknown canonical_id → triggers sanity retry.
+          return fullChunk('dinner', (_d, i) =>
+            i === 0
+              ? {
+                  cuisine: 'greek',
+                  ingredients: [
+                    { canonical_id: 'chicken_breast', quantity: 1, unit: 'lb' },
+                    { canonical_id: 'rice', quantity: 1, unit: 'cup' },
+                    { canonical_id: 'whole_milk', quantity: 0.5, unit: 'cup' },
+                  ],
+                }
+              : { cuisine: 'greek' }
+          );
+        }
+        // Sanity-retry: clean.
+        return fullChunk('dinner', () => ({ cuisine: 'greek' }));
+      }
+      return fullChunk(mealType);
+    });
+
+    const plan = await generatePlan(baseInput(), CANONICAL_IDS);
+
+    expect(plan.meals).toHaveLength(28);
+    expect(dinnerCallCount).toBe(3);
+    // No italian survived the variety repair.
+    const italianCount = plan.meals.filter(
+      (m) => m.cuisine?.toLowerCase() === 'italian'
+    ).length;
+    expect(italianCount).toBe(0);
+  });
 });

@@ -90,6 +90,9 @@ async function generateMealType(
   // Validation failed — retry once with a targeted repair message that quotes
   // the validator's reason. The most common cause is Haiku hallucinating a
   // canonical_id that isn't in the on-sale/pantry lists.
+  console.warn(
+    `[meal-planner] ${mealType} chunk failed validation on attempt 1, retrying. kind=${firstResult.kind} reason=${firstResult.reason}`
+  );
   const repairBlock = `Your previous attempt for the ${mealType} chunk was rejected. Reason: ${firstResult.reason}
 
 If the reason mentions "unknown canonical_id", every ingredient MUST reference a canonical_id copied verbatim from the "Available on sale" or "Pantry" lists above. Do NOT invent, guess, or infer IDs. If a recipe would need an ingredient that isn't in either list, pick a DIFFERENT recipe.
@@ -103,7 +106,12 @@ Otherwise, address the reason directly. Return exactly 7 ${mealType} meals via t
   const rawRetry = await callHaikuWithRetry(retry.system, retry.userText, retry.tool);
   const retryResult = validateMealTypeChunk(rawRetry, mealType, canonicalIds);
   if (!retryResult.ok) {
-    throw new ValidationError(retryResult.reason, retryResult.kind);
+    // Preserve the first-attempt reason for ops visibility — the .kind still
+    // reflects the second attempt so the /plan?error=… routing is unchanged.
+    throw new ValidationError(
+      `${retryResult.reason} (attempt 1 also failed: ${firstResult.reason})`,
+      retryResult.kind
+    );
   }
   return retryResult.chunk;
 }

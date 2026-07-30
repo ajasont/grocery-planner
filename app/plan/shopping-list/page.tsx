@@ -65,24 +65,27 @@ export default async function ShoppingListPage() {
               )}
             </h2>
             <ul>
-              {section.items.map((item) => (
-                <li key={item.canonicalId}>
-                  <ShoppingItemCheckbox
-                    planId={list.planId}
-                    canonicalId={item.canonicalId}
-                    initialChecked={item.isChecked}
-                  >
-                    <span>{item.name}</span>
-                    <span className="text-sm text-gray-500">
-                      {qty(item.quantity, item.unit) && ` · ${qty(item.quantity, item.unit)}`}
-                      {item.salePrice !== null && ` · ${fmt(item.salePrice)}`}
-                      {item.salePrice === null && item.regularPrice !== null &&
-                        ` · ${fmt(item.regularPrice)} (regular)`}
-                      {item.salePrice === null && item.regularPrice === null && ' · —'}
-                    </span>
-                  </ShoppingItemCheckbox>
-                </li>
-              ))}
+              {section.items.map((item) => {
+                const qtyStr = qty(item.quantity, item.unit);
+                return (
+                  <li key={item.canonicalId}>
+                    <ShoppingItemCheckbox
+                      planId={list.planId}
+                      canonicalId={item.canonicalId}
+                      initialChecked={item.isChecked}
+                    >
+                      <span>{item.name}</span>
+                      <span className="text-sm text-gray-500">
+                        {qtyStr && ` · ${qtyStr}`}
+                        {item.salePrice !== null && ` · ${fmt(item.salePrice)}`}
+                        {item.salePrice === null && item.regularPrice !== null &&
+                          ` · ${fmt(item.regularPrice)} (regular)`}
+                        {item.salePrice === null && item.regularPrice === null && ' · —'}
+                      </span>
+                    </ShoppingItemCheckbox>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ))

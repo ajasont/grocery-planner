@@ -28,6 +28,7 @@ export function ShoppingItemCheckbox({
         checked={checked}
         disabled={pending}
         onChange={(e) => {
+          if (pending) return;
           const next = e.target.checked;
           setChecked(next);
           startTransition(async () => {

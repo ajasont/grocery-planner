@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/jobs/weekly-refresh",
-      "schedule": "0 10 * * 0"
+      "schedule": "0 14 * * 0"
     }
   ]
 }

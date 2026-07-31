@@ -4,6 +4,7 @@ import { isPublicPath } from '@/middleware';
 describe('isPublicPath', () => {
   it('lets the Vercel Cron path through without auth', () => {
     expect(isPublicPath('/api/jobs/weekly-refresh')).toBe(true);
+    expect(isPublicPath('/api/jobs/weekly-refresh/')).toBe(true);
   });
 
   it('lets login and auth endpoints through', () => {
@@ -17,5 +18,6 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/pantry')).toBe(false);
     expect(isPublicPath('/api/plan/generate')).toBe(false);
     expect(isPublicPath('/api/admin/refresh-ht')).toBe(false);
+    expect(isPublicPath('/api/jobs/weekly-refreshXYZ')).toBe(false);
   });
 });

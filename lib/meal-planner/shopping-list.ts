@@ -187,8 +187,8 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
     };
   };
 
-  // 2–4. Ingredients, deals, and checks are all independent — fetch in parallel.
-  const [ingResult, dealResult, checkResult] = await Promise.all([
+  // 2–5. Ingredients, deals, checks, and live pantry are all independent — fetch in parallel.
+  const [ingResult, dealResult, checkResult, pantryResult] = await Promise.all([
     supabase
       .from('meals')
       .select(
@@ -209,13 +209,18 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
       .from('shopping_list_checks')
       .select('canonical_ingredient_id')
       .eq('meal_plan_id', planId),
+    supabase
+      .from('pantry')
+      .select('canonical_ingredient_id'),
   ]);
   if (ingResult.error) throw ingResult.error;
   if (dealResult.error) throw dealResult.error;
   if (checkResult.error) throw checkResult.error;
+  if (pantryResult.error) throw pantryResult.error;
   const ingRows = ingResult.data;
   const dealRows = dealResult.data;
   const checkRows = checkResult.data;
+  const pantryRows = pantryResult.data;
 
   const ingredients = ((ingRows ?? []) as unknown as MealRow[]).flatMap((meal) =>
     (meal.meal_ingredients ?? []).map((ing) => ({
@@ -241,10 +246,20 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
     )
   );
 
+  // Union the snapshot (what Haiku saw at plan-generation time) with the live
+  // pantry (anything the user has added since). The pure builder filters ingredients
+  // whose canonical is in this set.
+  const livePantryIds = ((pantryRows ?? []) as Array<{ canonical_ingredient_id: string }>).map(
+    (r) => r.canonical_ingredient_id
+  );
+  const pantryCanonicalIds = Array.from(
+    new Set<string>([...(plan.pantry_canonical_ingredient_ids ?? []), ...livePantryIds])
+  );
+
   return buildShoppingListFromRows({
     planId,
     weekOf,
-    pantryCanonicalIds: plan.pantry_canonical_ingredient_ids ?? [],
+    pantryCanonicalIds,
     ingredients,
     deals,
     checkedCanonicalIds,

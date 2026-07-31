@@ -217,4 +217,51 @@ describe('buildShoppingListFromRows', () => {
     expect(chicken?.isChecked).toBe(true);
     expect(rice?.isChecked).toBe(false);
   });
+
+  it('excludes items whose canonical_id is in the live pantry union (not in snapshot)', () => {
+    const result = buildShoppingListFromRows(
+      inputs({
+        // Simulates the orchestrator having unioned snapshot + live pantry.
+        pantryCanonicalIds: ['garlic'],
+        ingredients: [
+          { canonicalId: 'garlic', canonicalName: 'Garlic', quantity: 1, unit: 'head' },
+          { canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', quantity: 1, unit: 'lb' },
+        ],
+      })
+    );
+    const canonicals = result.sections.flatMap((s) => s.items.map((i) => i.canonicalId));
+    expect(canonicals).toEqual(['chicken_breast']);
+  });
+
+  it('deduplicates when the same canonical is in both snapshot and live pantry (no double effect)', () => {
+    // Real orchestrator unions the two lists before passing them in. A canonical
+    // appearing twice in the input should filter out exactly once — no crash, no double-count.
+    const result = buildShoppingListFromRows(
+      inputs({
+        pantryCanonicalIds: ['olive_oil', 'olive_oil'],
+        ingredients: [
+          { canonicalId: 'olive_oil', canonicalName: 'Olive Oil', quantity: 2, unit: 'tbsp' },
+          { canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', quantity: 1, unit: 'lb' },
+        ],
+      })
+    );
+    const canonicals = result.sections.flatMap((s) => s.items.map((i) => i.canonicalId));
+    expect(canonicals).toEqual(['chicken_breast']);
+  });
+
+  it('handles disjoint snapshot and live pantry canonicals — both filtered, third ingredient survives', () => {
+    // Simulates snapshot exclude=[A], live pantry exclude=[B] merged by orchestrator into [A, B].
+    const result = buildShoppingListFromRows(
+      inputs({
+        pantryCanonicalIds: ['olive_oil', 'garlic'],
+        ingredients: [
+          { canonicalId: 'olive_oil', canonicalName: 'Olive Oil', quantity: 2, unit: 'tbsp' },
+          { canonicalId: 'garlic', canonicalName: 'Garlic', quantity: 1, unit: 'head' },
+          { canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', quantity: 1, unit: 'lb' },
+        ],
+      })
+    );
+    const canonicals = result.sections.flatMap((s) => s.items.map((i) => i.canonicalId));
+    expect(canonicals).toEqual(['chicken_breast']);
+  });
 });

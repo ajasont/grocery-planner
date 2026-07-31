@@ -13,15 +13,17 @@ export async function POST(req: NextRequest) {
     mapperError = err instanceof Error ? err.message : String(err);
   }
 
+  // Default to JSON so curl/tooling that sends Accept: */* keeps its historical
+  // behavior; only redirect when the client explicitly wants HTML (browser form).
   const accept = req.headers.get('accept') ?? '';
-  if (accept.includes('application/json')) {
-    return NextResponse.json({
-      ok: result.status === 'OK',
-      ...result,
-      skusMapped: mapping.mapped,
-      skusSkipped: mapping.skipped,
-      ...(mapperError !== null ? { mapperError } : {}),
-    });
+  if (accept.includes('text/html')) {
+    return NextResponse.redirect(new URL('/health', req.url), 303);
   }
-  return NextResponse.redirect(new URL('/health', req.url), 303);
+  return NextResponse.json({
+    ok: result.status === 'OK',
+    ...result,
+    skusMapped: mapping.mapped,
+    skusSkipped: mapping.skipped,
+    ...(mapperError !== null ? { mapperError } : {}),
+  });
 }

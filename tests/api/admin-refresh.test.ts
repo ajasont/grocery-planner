@@ -49,12 +49,25 @@ describe('POST /api/admin/refresh-ht', () => {
     expect(res.headers.get('location')).toBe('https://example.test/health');
   });
 
-  it('303-redirects when Accept header is missing entirely', async () => {
+  it('returns JSON (not redirect) when Accept header is missing (curl default)', async () => {
     const req = new NextRequest('https://example.test/api/admin/refresh-ht', {
       method: 'POST',
     });
     const res = await postHt(req);
-    expect(res.status).toBe(303);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
+
+  it('returns JSON when Accept is */* (curl default)', async () => {
+    const req = new NextRequest('https://example.test/api/admin/refresh-ht', {
+      method: 'POST',
+      headers: { accept: '*/*' },
+    });
+    const res = await postHt(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
   });
 
   it('calls refreshRetailer with "harris-teeter"', async () => {

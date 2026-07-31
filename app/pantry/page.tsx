@@ -22,9 +22,12 @@ export default async function PantryRoute() {
 
   return (
     <main className="max-w-2xl mx-auto p-6">
-      <div className="mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <Link href="/plan" className="text-sm text-blue-600 hover:underline">
           ← Back to plan
+        </Link>
+        <Link href="/health" className="text-sm text-blue-600 hover:underline">
+          Health →
         </Link>
       </div>
 

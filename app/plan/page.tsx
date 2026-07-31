@@ -72,9 +72,14 @@ export default async function PlanPage({
       <main>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">This week&apos;s plan</h2>
-          <Link href="/" className="text-sm text-neutral-500 hover:underline">
-            ← Deals
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/health" className="text-sm text-neutral-500 hover:underline">
+              Health
+            </Link>
+            <Link href="/" className="text-sm text-neutral-500 hover:underline">
+              ← Deals
+            </Link>
+          </div>
         </div>
         {health?.hasProblem && <HealthBanner health={health} />}
         {errorKind && <ErrorBanner kind={errorKind} />}
@@ -100,6 +105,9 @@ export default async function PlanPage({
             className="text-sm text-neutral-500 hover:underline"
           >
             Shopping list
+          </Link>
+          <Link href="/health" className="text-sm text-neutral-500 hover:underline">
+            Health
           </Link>
           <Link href="/" className="text-sm text-neutral-500 hover:underline">
             ← Deals

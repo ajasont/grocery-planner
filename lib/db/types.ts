@@ -55,6 +55,16 @@ export type RetailerHealth = {
   last_error: string | null;
 };
 
+export type JobRun = {
+  id: number;
+  run_at: string;              // ISO timestamp
+  mapper_status: 'OK' | 'FAILED';
+  mapper_mapped: number;
+  mapper_skipped: number;
+  mapper_failed: number;
+  mapper_error: string | null;
+};
+
 export type Tables = {
   retailers: Retailer;
   stores: Store;
@@ -62,4 +72,5 @@ export type Tables = {
   retailer_skus: RetailerSku;
   deals: Deal;
   retailer_health: RetailerHealth;
+  job_runs: JobRun;
 };

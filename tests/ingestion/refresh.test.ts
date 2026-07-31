@@ -16,7 +16,9 @@ vi.mock('@/lib/ingestion/persist', () => ({
 
 // Supabase mock — fluent chain used by touchHealthFailed for the retailers lookup
 // and the retailer_health preserve+upsert.
-const healthUpsertSpy = vi.fn(async () => ({ error: null }));
+const healthUpsertSpy = vi.fn<
+  (row: unknown, opts: unknown) => Promise<{ error: { message: string } | null }>
+>(async () => ({ error: null }));
 const healthMaybeSingleSpy = vi.fn(async () => ({
   data: { last_success_at: '2026-07-24T10:00:00.000Z' },
   error: null,

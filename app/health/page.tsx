@@ -53,6 +53,7 @@ function RetailerCard({ r }: { r: RetailerStatus }) {
         <form action={retryAction(r.name)} method="POST">
           <button
             type="submit"
+            aria-label={`Retry ${r.displayName}`}
             className="rounded border px-3 py-1 text-sm hover:bg-neutral-50"
           >
             Retry
@@ -95,7 +96,10 @@ export default async function HealthPage() {
 
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Health</h1>
-        <div className={`mt-2 rounded border p-3 text-sm font-medium ${overallClass}`}>
+        <div
+          role={health.hasProblem ? 'alert' : 'status'}
+          className={`mt-2 rounded border p-3 text-sm font-medium ${overallClass}`}
+        >
           {overall}
         </div>
       </header>

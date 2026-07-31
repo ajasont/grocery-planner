@@ -55,7 +55,7 @@ export default async function ShoppingListPage() {
       </header>
 
       {list.sections.length === 0 ? (
-        <p className="text-gray-500">No items to buy for this week's plan.</p>
+        <p className="text-gray-500">No items to buy for this week&apos;s plan.</p>
       ) : (
         list.sections.map((section) => (
           <section key={section.retailer} className="mb-6">

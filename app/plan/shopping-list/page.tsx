@@ -5,6 +5,8 @@ import { getCurrentWeekOfISO } from '@/lib/dates';
 import { buildShoppingList } from '@/lib/meal-planner/shopping-list';
 import { ShoppingItemCheckbox } from './ShoppingItemCheckbox';
 
+export const dynamic = 'force-dynamic';
+
 function fmt(n: number): string {
   return `$${n.toFixed(2)}`;
 }

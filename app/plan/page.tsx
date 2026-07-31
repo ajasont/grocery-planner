@@ -3,6 +3,8 @@ import { getCurrentWeekPlan } from '@/lib/meal-planner/read';
 import { DayAccordion } from './DayAccordion';
 import { RegenerateButton } from './RegenerateButton';
 import type { Day } from '@/lib/meal-planner/types';
+import { computeHealth } from '@/lib/health/status';
+import { HealthBanner } from './HealthBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +58,10 @@ export default async function PlanPage({
 }: {
   searchParams: { error?: string };
 }) {
-  const plan = await getCurrentWeekPlan();
+  const [plan, health] = await Promise.all([
+    getCurrentWeekPlan(),
+    computeHealth(),
+  ]);
   const errorKind = searchParams.error;
 
   if (!plan) {
@@ -68,6 +73,7 @@ export default async function PlanPage({
             ← Deals
           </Link>
         </div>
+        {health.hasProblem && <HealthBanner health={health} />}
         {errorKind && <ErrorBanner kind={errorKind} />}
         <div className="rounded border bg-white p-4 shadow-sm">
           <p className="mb-3 text-sm text-neutral-600">
@@ -97,6 +103,7 @@ export default async function PlanPage({
           </Link>
         </div>
       </div>
+      {health.hasProblem && <HealthBanner health={health} />}
       {errorKind && <ErrorBanner kind={errorKind} />}
       <ol className="space-y-2">
         {plan.days.map((d) => (

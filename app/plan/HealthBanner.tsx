@@ -45,7 +45,10 @@ function bannerMessage(health: HealthSnapshot): string {
 export function HealthBanner({ health }: { health: HealthSnapshot }) {
   const message = bannerMessage(health);
   return (
-    <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+    <div
+      role="alert"
+      className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+    >
       <p className="font-medium">
         {message} —{' '}
         <Link href="/health" className="underline hover:no-underline">

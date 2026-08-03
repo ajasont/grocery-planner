@@ -113,9 +113,9 @@ async function main() {
 
   for (const { namePattern, wrongCanonical } of BAD_MAPPINGS) {
     const { data, error } = await supabase
-      .from('raw_products')
+      .from('retailer_skus')
       .update({ canonical_ingredient_id: null, mapping_verified: false })
-      .ilike('name', namePattern)
+      .ilike('product_name', namePattern)
       .eq('canonical_ingredient_id', wrongCanonical)
       .select('id');
     if (error) throw error;
@@ -157,8 +157,8 @@ Deliberately light — most of the change is data/prompt, not logic.
 - No new tests for `mapper.ts`. The existing `tests/normalization/mapper.test.ts` is structural (mocked Anthropic client); adding a `system` param doesn't change the shape it tests. Prompt behavior can only be verified by hitting the real API — that's what the smoke test below does.
 
 **Manual smoke test (after script runs against prod DB):**
-1. Query Supabase directly for a few `raw_products` rows expected to have been fixed:
-   - `select name, canonical_ingredient_id from raw_products where name ilike '%mahi%';` → should now show `mahi_mahi` or `NULL`, never `cod_fillet`.
+1. Query Supabase directly for a few `retailer_skus` rows expected to have been fixed:
+   - `select product_name, canonical_ingredient_id from retailer_skus where product_name ilike '%mahi%';` → should now show `mahi_mahi` or `NULL`, never `cod_fillet`.
    - Same for turkey sausage → `turkey_sausage` or `NULL`.
    - Same for margarine → `margarine` or `NULL`.
 2. Spot-check the script's run output — per-pattern cleared count and final mapper summary. If cleared counts are 0 for all three patterns, investigate (either no bad data exists, or the patterns don't match).
@@ -171,7 +171,7 @@ Deliberately light — most of the change is data/prompt, not logic.
 ## Success criteria
 
 - `mahi_mahi`, `turkey_sausage`, `margarine` exist in `canonical_ingredients` in prod DB.
-- After running `scripts/remap-known-bad.ts` in prod, no `raw_products` rows exist where `name ilike '%mahi%'` and `canonical_ingredient_id = 'cod_fillet'`. Same for the other two patterns.
+- After running `scripts/remap-known-bad.ts` in prod, no `retailer_skus` rows exist where `product_name ilike '%mahi%'` and `canonical_ingredient_id = 'cod_fillet'`. Same for the other two patterns.
 - Newly-mapped SKUs land on the correct canonical (`mahi_mahi`, `turkey_sausage`, `margarine`) or `NULL` (never on the old wrong canonical).
 - Existing unit tests + typecheck still pass.
 

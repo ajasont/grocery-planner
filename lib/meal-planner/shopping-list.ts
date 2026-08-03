@@ -233,11 +233,13 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
 
   type MealRow = {
     id: number;
+    day: string;
+    name: string;
     meal_ingredients: Array<{
       canonical_ingredient_id: string;
       quantity: number | null;
       unit: string | null;
-      canonical_ingredients: { name: string } | null;
+      canonical_ingredients: { name: string; shopping_group: string | null } | null;
     }>;
   };
   type DealRow = {
@@ -245,6 +247,7 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
     regular_price: number | null;
     retailer_skus: {
       canonical_ingredient_id: string | null;
+      canonical_ingredients: { shopping_group: string | null } | null;
       retailers: { name: string };
     };
   };
@@ -254,9 +257,9 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
     supabase
       .from('meals')
       .select(
-        `id,
+        `id, day, name,
          meal_ingredients (canonical_ingredient_id, quantity, unit,
-           canonical_ingredients (name))`
+           canonical_ingredients (name, shopping_group))`
       )
       .eq('meal_plan_id', planId),
     supabase
@@ -264,6 +267,7 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
       .select(
         `sale_price, regular_price,
          retailer_skus!inner (canonical_ingredient_id,
+           canonical_ingredients (shopping_group),
            retailers!inner (name))`
       )
       .eq('week_of', weekOf),
@@ -288,8 +292,11 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
     (meal.meal_ingredients ?? []).map((ing) => ({
       canonicalId: ing.canonical_ingredient_id,
       canonicalName: ing.canonical_ingredients?.name ?? ing.canonical_ingredient_id,
+      shoppingGroup: ing.canonical_ingredients?.shopping_group ?? null,
       quantity: ing.quantity,
       unit: ing.unit,
+      mealName: meal.name,
+      mealDay: meal.day,
     }))
   );
 
@@ -297,6 +304,7 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
     .filter((r) => r.retailer_skus.canonical_ingredient_id !== null)
     .map((r) => ({
       canonicalId: r.retailer_skus.canonical_ingredient_id as string,
+      shoppingGroup: r.retailer_skus.canonical_ingredients?.shopping_group ?? null,
       retailerName: r.retailer_skus.retailers.name,
       salePrice: r.sale_price,
       regularPrice: r.regular_price,

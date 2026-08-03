@@ -64,6 +64,7 @@ export type CanonicalIngredient = {
 
 ```typescript
 export type ShoppingListItemUsage = {
+  mealDay: string;
   mealName: string;
   canonicalId: string;
   canonicalDisplayName: string;

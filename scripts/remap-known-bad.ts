@@ -15,6 +15,7 @@ const BAD_MAPPINGS: Array<{ namePattern: string; wrongCanonical: string }> = [
 ];
 
 async function main() {
+  console.log(`Target DB: ${process.env.SUPABASE_URL ?? '(SUPABASE_URL not set)'}\n`);
   const supabase = getServerClient();
   let totalCleared = 0;
 

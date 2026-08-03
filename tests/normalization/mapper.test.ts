@@ -153,4 +153,31 @@ describe('mapProductNames', () => {
     expect(result).toEqual([]);
     expect(mockCreate).not.toHaveBeenCalled();
   });
+
+  it('sends a system prompt with the substitution guardrails on every batch', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [
+        {
+          type: 'tool_use',
+          name: 'map_ingredients',
+          input: {
+            mappings: [{ index: 0, canonical_id: 'chicken_breast', confidence: 0.9 }],
+          },
+        },
+      ],
+    });
+
+    await mapProductNames(['Chicken Breast']);
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    const args = mockCreate.mock.calls[0][0] as { system?: string };
+    expect(typeof args.system).toBe('string');
+    // The prompt must reference the three known-bad examples so a future
+    // edit that accidentally drops the guardrails fails this test.
+    expect(args.system).toMatch(/Mahi Mahi/);
+    expect(args.system).toMatch(/Turkey Sausage/);
+    expect(args.system).toMatch(/Margarine/);
+    // And it must give the model explicit permission to return "unknown".
+    expect(args.system).toMatch(/unknown/);
+  });
 });

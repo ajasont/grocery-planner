@@ -19,6 +19,7 @@ export type CanonicalIngredient = {
   category: string | null;
   default_unit: string | null;
   aisle_group: string | null;
+  shopping_group: string | null;
 };
 
 export type RetailerSku = {

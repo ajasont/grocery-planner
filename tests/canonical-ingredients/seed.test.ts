@@ -47,3 +47,35 @@ describe('canonical ingredients seed — shopping_group', () => {
     expect(offenders, 'unexpected shopping_group values found').toEqual([]);
   });
 });
+
+describe('canonical ingredients seed — mapper fix additions', () => {
+  it('includes mahi_mahi as a seafood canonical', () => {
+    const row = byId.get('mahi_mahi');
+    expect(row).toBeDefined();
+    expect(row?.name).toBe('Mahi Mahi');
+    expect(row?.category).toBe('seafood');
+    expect(row?.aisle_group).toBe('seafood');
+    expect(row?.default_unit).toBe('lb');
+    expect(row?.shopping_group).toBeNull();
+  });
+
+  it('includes turkey_sausage as a poultry canonical', () => {
+    const row = byId.get('turkey_sausage');
+    expect(row).toBeDefined();
+    expect(row?.name).toBe('Turkey Sausage');
+    expect(row?.category).toBe('poultry');
+    expect(row?.aisle_group).toBe('meat');
+    expect(row?.default_unit).toBe('lb');
+    expect(row?.shopping_group).toBeNull();
+  });
+
+  it('includes margarine as a dairy-aisle canonical', () => {
+    const row = byId.get('margarine');
+    expect(row).toBeDefined();
+    expect(row?.name).toBe('Margarine');
+    expect(row?.category).toBe('dairy');
+    expect(row?.aisle_group).toBe('dairy');
+    expect(row?.default_unit).toBe('lb');
+    expect(row?.shopping_group).toBeNull();
+  });
+});

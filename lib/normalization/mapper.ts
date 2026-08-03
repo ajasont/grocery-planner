@@ -9,6 +9,20 @@ export type Mapping = {
 const BATCH_SIZE = 20;
 const MODEL = 'claude-haiku-4-5-20251001';
 
+const SYSTEM_PROMPT = `You are matching retailer product names to canonical grocery ingredients.
+
+Match on the product's core noun — the specific food type — not on visual, cost, or aisle similarity. Two products that live near each other in a store are not the same ingredient.
+
+Return "unknown" when the product's core noun does not appear in the canonical list. It is always correct to return "unknown"; it is never correct to substitute a different food.
+
+Examples of the substitution mistake to avoid:
+- A "Mahi Mahi" fillet is not "Cod Fillet". Different fish are different ingredients.
+- "Turkey Sausage Links" or "Turkey Sausage" is not "Turkey Breast". Sausage and breast are different cuts.
+- "Margarine" is not "Salted Butter". Margarine and butter are different fats.
+- A "Pork Loin Chop" is not "Pork Tenderloin". Different cuts are different ingredients.
+
+If the product is not a cookable ingredient at all (e.g., flowers, prepared sandwiches, bulk candy, gift cards), return "unknown".`;
+
 const TOOL = {
   name: 'map_ingredients',
   description:
@@ -55,6 +69,7 @@ export async function mapProductNames(names: string[]): Promise<Mapping[]> {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 2048,
+      system: SYSTEM_PROMPT,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tools: [TOOL as any],
       tool_choice: { type: 'tool', name: 'map_ingredients' },

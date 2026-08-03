@@ -5,35 +5,41 @@ import { getServerClient } from '@/lib/db/client';
 
 export async function toggleShoppingItem(
   planId: number,
-  canonicalId: string,
+  memberCanonicalIds: readonly string[],
   nextChecked: boolean
 ): Promise<void> {
+  if (memberCanonicalIds.length === 0) return;
   const supabase = getServerClient();
+
   if (nextChecked) {
-    // 1. Persist the check.
+    // 1. Persist one check row per member canonical.
+    const checkRows = memberCanonicalIds.map((canonicalId) => ({
+      meal_plan_id: planId,
+      canonical_ingredient_id: canonicalId,
+    }));
     const { error: checkErr } = await supabase
       .from('shopping_list_checks')
-      .upsert({ meal_plan_id: planId, canonical_ingredient_id: canonicalId });
+      .upsert(checkRows);
     if (checkErr) throw checkErr;
 
-    // 2. Auto-add to pantry. Idempotent thanks to UNIQUE(canonical_ingredient_id).
-    //    From here on, the live-pantry filter in buildShoppingList drops the row
-    //    from the visible list — the check state on this row becomes moot.
-    const { error: pantryErr } = await supabase
-      .from('pantry')
-      .upsert(
-        { canonical_ingredient_id: canonicalId, quantity: null, unit: null },
-        { onConflict: 'canonical_ingredient_id', ignoreDuplicates: true }
-      );
-    if (pantryErr) throw pantryErr;
+    // 2. Auto-add every member to pantry. Idempotent via UNIQUE(canonical_ingredient_id).
+    for (const canonicalId of memberCanonicalIds) {
+      const { error: pantryErr } = await supabase
+        .from('pantry')
+        .upsert(
+          { canonical_ingredient_id: canonicalId, quantity: null, unit: null },
+          { onConflict: 'canonical_ingredient_id', ignoreDuplicates: true }
+        );
+      if (pantryErr) throw pantryErr;
+    }
   } else {
-    // Uncheck: remove the check row only. Do NOT auto-remove from pantry
-    // (unchecks are usually corrections, not "I ate it already").
+    // Uncheck: remove the N check rows in one query. Do NOT touch pantry
+    // (matches prior behavior — unchecks are usually corrections).
     const { error } = await supabase
       .from('shopping_list_checks')
       .delete()
       .eq('meal_plan_id', planId)
-      .eq('canonical_ingredient_id', canonicalId);
+      .in('canonical_ingredient_id', memberCanonicalIds as string[]);
     if (error) throw error;
   }
   revalidatePath('/plan/shopping-list');

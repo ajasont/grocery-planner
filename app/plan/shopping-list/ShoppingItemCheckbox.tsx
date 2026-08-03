@@ -5,12 +5,12 @@ import { toggleShoppingItem } from './actions';
 
 export function ShoppingItemCheckbox({
   planId,
-  canonicalId,
+  memberCanonicalIds,
   initialChecked,
   children,
 }: {
   planId: number;
-  canonicalId: string;
+  memberCanonicalIds: readonly string[];
   initialChecked: boolean;
   children: React.ReactNode;
 }) {
@@ -33,7 +33,7 @@ export function ShoppingItemCheckbox({
           setChecked(next);
           startTransition(async () => {
             try {
-              await toggleShoppingItem(planId, canonicalId, next);
+              await toggleShoppingItem(planId, memberCanonicalIds, next);
             } catch {
               setChecked(!next);
             }

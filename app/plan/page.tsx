@@ -3,6 +3,8 @@ import { getCurrentWeekPlan } from '@/lib/meal-planner/read';
 import { DayAccordion } from './DayAccordion';
 import { RegenerateButton } from './RegenerateButton';
 import type { Day } from '@/lib/meal-planner/types';
+import { computeHealth } from '@/lib/health/status';
+import { HealthBanner } from './HealthBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +58,13 @@ export default async function PlanPage({
 }: {
   searchParams: { error?: string };
 }) {
-  const plan = await getCurrentWeekPlan();
+  const [plan, health] = await Promise.all([
+    getCurrentWeekPlan(),
+    computeHealth().catch((err) => {
+      console.warn('computeHealth failed on /plan:', err);
+      return null;
+    }),
+  ]);
   const errorKind = searchParams.error;
 
   if (!plan) {
@@ -64,10 +72,16 @@ export default async function PlanPage({
       <main>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">This week&apos;s plan</h2>
-          <Link href="/" className="text-sm text-neutral-500 hover:underline">
-            ← Deals
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/health" className="text-sm text-neutral-500 hover:underline">
+              Health
+            </Link>
+            <Link href="/" className="text-sm text-neutral-500 hover:underline">
+              ← Deals
+            </Link>
+          </div>
         </div>
+        {health?.hasProblem && <HealthBanner health={health} />}
         {errorKind && <ErrorBanner kind={errorKind} />}
         <div className="rounded border bg-white p-4 shadow-sm">
           <p className="mb-3 text-sm text-neutral-600">
@@ -92,11 +106,15 @@ export default async function PlanPage({
           >
             Shopping list
           </Link>
+          <Link href="/health" className="text-sm text-neutral-500 hover:underline">
+            Health
+          </Link>
           <Link href="/" className="text-sm text-neutral-500 hover:underline">
             ← Deals
           </Link>
         </div>
       </div>
+      {health?.hasProblem && <HealthBanner health={health} />}
       {errorKind && <ErrorBanner kind={errorKind} />}
       <ol className="space-y-2">
         {plan.days.map((d) => (

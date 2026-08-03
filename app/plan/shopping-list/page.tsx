@@ -36,12 +36,15 @@ export default async function ShoppingListPage() {
 
   return (
     <main className="max-w-2xl mx-auto p-6">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center gap-4">
         <Link href="/plan" className="text-sm text-blue-600 hover:underline">
           ← Back to plan
         </Link>
         <Link href="/pantry" className="text-sm text-blue-600 hover:underline">
-          Pantry →
+          Pantry
+        </Link>
+        <Link href="/health" className="text-sm text-blue-600 hover:underline">
+          Health
         </Link>
       </div>
 

@@ -1,24 +1,29 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { refreshRetailer } from '@/lib/ingestion/refresh';
 import { runMappingForUnmappedSkus } from '@/lib/normalization/runner';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const result = await refreshRetailer('sprouts');
+  let mapping = { mapped: 0, skipped: 0 };
+  let mapperError: string | null = null;
   try {
-    const mapping = await runMappingForUnmappedSkus();
-    return NextResponse.json({
-      ok: result.status === 'OK',
-      ...result,
-      skusMapped: mapping.mapped,
-      skusSkipped: mapping.skipped,
-    });
+    const m = await runMappingForUnmappedSkus();
+    mapping = { mapped: m.mapped, skipped: m.skipped };
   } catch (err) {
-    return NextResponse.json({
-      ok: result.status === 'OK',
-      ...result,
-      skusMapped: 0,
-      skusSkipped: 0,
-      mapperError: err instanceof Error ? err.message : String(err),
-    });
+    mapperError = err instanceof Error ? err.message : String(err);
   }
+
+  // Default to JSON so curl/tooling that sends Accept: */* keeps its historical
+  // behavior; only redirect when the client explicitly wants HTML (browser form).
+  const accept = req.headers.get('accept') ?? '';
+  if (accept.includes('text/html')) {
+    return NextResponse.redirect(new URL('/health', req.url), 303);
+  }
+  return NextResponse.json({
+    ok: result.status === 'OK',
+    ...result,
+    skusMapped: mapping.mapped,
+    skusSkipped: mapping.skipped,
+    ...(mapperError !== null ? { mapperError } : {}),
+  });
 }

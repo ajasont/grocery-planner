@@ -7,11 +7,15 @@ export type ShoppingListInputs = {
   ingredients: ReadonlyArray<{
     canonicalId: string;
     canonicalName: string;
+    shoppingGroup: string | null;
     quantity: number | null;
     unit: string | null;
+    mealName: string;
+    mealDay: string;
   }>;
   deals: ReadonlyArray<{
     canonicalId: string;
+    shoppingGroup: string | null;
     retailerName: string;
     salePrice: number | null;
     regularPrice: number | null;
@@ -19,14 +23,25 @@ export type ShoppingListInputs = {
   checkedCanonicalIds: ReadonlySet<string>;
 };
 
-export type ShoppingListItem = {
+export type ShoppingListItemUsage = {
+  mealDay: string;
+  mealName: string;
   canonicalId: string;
-  name: string;
+  canonicalDisplayName: string;
+};
+
+export type ShoppingListItem = {
+  groupKey: string;                        // shopping_group ?? canonicalId
+  displayName: string;                     // family display name or canonical name
+  memberCanonicalIdsInUse: string[];       // for the server action
+  usage: ShoppingListItemUsage[];          // "used in: …" sub-line data
   quantity: number;
   unit: string | null;
-  salePrice: number | null;
-  regularPrice: number | null;
-  isChecked: boolean;
+  salePrice: number | null;                // cheapest member's sale price (or null)
+  regularPrice: number | null;             // cheapest member's regular price (or null)
+  cheapestMemberCanonicalId: string;       // "cheapest: X" recommendation
+  cheapestMemberDisplayName: string;
+  isChecked: boolean;                      // true iff EVERY member-in-use is checked
 };
 
 export type ShoppingListSection = {
@@ -45,46 +60,78 @@ export type ShoppingList = {
 
 const NOT_ON_SALE = 'Not on sale';
 
+// In-code map from shopping_group slug to display name. Add entries here when
+// new groups are introduced (e.g., butter, ground_beef).
+const GROUP_DISPLAY_NAMES: Record<string, string> = {
+  pasta: 'Pasta',
+};
+
 export function buildShoppingListFromRows(inputs: ShoppingListInputs): ShoppingList {
   const pantry = new Set(inputs.pantryCanonicalIds);
 
-  // 1. Aggregate ingredients per canonical_id.
+  // 1. Aggregate ingredients per groupKey = shoppingGroup ?? canonicalId.
   type Agg = {
-    canonicalId: string;
-    name: string;
+    groupKey: string;
+    displayName: string;
+    memberCanonicalIdsInUse: Set<string>;
+    memberIdToName: Map<string, string>;
+    usage: ShoppingListItemUsage[];
     quantity: number;
     unit: string | null;
   };
-  const byCanonical = new Map<string, Agg>();
+  const byGroup = new Map<string, Agg>();
   for (const ing of inputs.ingredients) {
     if (pantry.has(ing.canonicalId)) continue;
+    const groupKey = ing.shoppingGroup ?? ing.canonicalId;
+    const displayName =
+      ing.shoppingGroup !== null
+        ? (GROUP_DISPLAY_NAMES[ing.shoppingGroup] ?? ing.canonicalName)
+        : ing.canonicalName;
     const qty = ing.quantity ?? 0;
-    const existing = byCanonical.get(ing.canonicalId);
-    if (!existing) {
-      byCanonical.set(ing.canonicalId, {
-        canonicalId: ing.canonicalId,
-        name: ing.canonicalName,
-        quantity: qty,
+    let agg = byGroup.get(groupKey);
+    if (!agg) {
+      agg = {
+        groupKey,
+        displayName,
+        memberCanonicalIdsInUse: new Set(),
+        memberIdToName: new Map(),
+        usage: [],
+        quantity: 0,
         unit: ing.unit,
-      });
-    } else {
-      existing.quantity += qty;
-      if (existing.unit !== ing.unit) existing.unit = null;
+      };
+      byGroup.set(groupKey, agg);
+    } else if (agg.unit !== ing.unit) {
+      agg.unit = null;
     }
+    agg.memberCanonicalIdsInUse.add(ing.canonicalId);
+    agg.memberIdToName.set(ing.canonicalId, ing.canonicalName);
+    agg.usage.push({
+      mealDay: ing.mealDay,
+      mealName: ing.mealName,
+      canonicalId: ing.canonicalId,
+      canonicalDisplayName: ing.canonicalName,
+    });
+    agg.quantity += qty;
   }
 
-  // 2. Pick the cheapest deal per canonical.
-  // Prefer rows with a sale_price; among those, pick the lowest sale_price.
-  // If no rows have a sale_price, pick the lowest regular_price.
-  type Pick = { retailer: string; salePrice: number | null; regularPrice: number | null };
-  const pickByCanonical = new Map<string, Pick>();
-  const dealsByCanonical = new Map<string, ShoppingListInputs['deals'][number][]>();
+  // 2. Pick the cheapest deal across all members of each group.
+  // Same rule as before: prefer any sale price; among sale rows, lowest price wins.
+  // Fall back to lowest regular_price if no member has a sale price.
+  type Pick = {
+    retailer: string;
+    salePrice: number | null;
+    regularPrice: number | null;
+    cheapestMemberCanonicalId: string;
+  };
+  const dealsByGroup = new Map<string, ShoppingListInputs['deals'][number][]>();
   for (const d of inputs.deals) {
-    const list = dealsByCanonical.get(d.canonicalId) ?? [];
+    const key = d.shoppingGroup ?? d.canonicalId;
+    const list = dealsByGroup.get(key) ?? [];
     list.push(d);
-    dealsByCanonical.set(d.canonicalId, list);
+    dealsByGroup.set(key, list);
   }
-  dealsByCanonical.forEach((rows, canonicalId) => {
+  const pickByGroup = new Map<string, Pick>();
+  dealsByGroup.forEach((rows, groupKey) => {
     const onSale = rows.filter((r) => r.salePrice !== null);
     const pool = onSale.length > 0 ? onSale : rows;
     const priceKey = onSale.length > 0
@@ -94,25 +141,41 @@ export function buildShoppingListFromRows(inputs: ShoppingListInputs): ShoppingL
     for (const r of pool) {
       if (priceKey(r) < priceKey(best)) best = r;
     }
-    pickByCanonical.set(canonicalId, {
+    pickByGroup.set(groupKey, {
       retailer: best.retailerName,
       salePrice: best.salePrice,
       regularPrice: best.regularPrice,
+      cheapestMemberCanonicalId: best.canonicalId,
     });
   });
 
   // 3. Bucket items by retailer (or NOT_ON_SALE).
   const bySection = new Map<string, ShoppingListItem[]>();
-  byCanonical.forEach((a) => {
-    const pick = pickByCanonical.get(a.canonicalId);
-    const isChecked = inputs.checkedCanonicalIds.has(a.canonicalId);
+  byGroup.forEach((agg) => {
+    const pick = pickByGroup.get(agg.groupKey);
+    const memberIds = Array.from(agg.memberCanonicalIdsInUse);
+    const isChecked =
+      memberIds.length > 0 &&
+      memberIds.every((id) => inputs.checkedCanonicalIds.has(id));
+
+    // Cheapest-member display name: prefer the deal's canonical, then any usage
+    // occurrence, then the group's own display name.
+    const cheapestCanonicalId =
+      pick?.cheapestMemberCanonicalId ?? memberIds[0] ?? agg.groupKey;
+    const cheapestDisplayName =
+      agg.memberIdToName.get(cheapestCanonicalId) ?? agg.displayName;
+
     const item: ShoppingListItem = {
-      canonicalId: a.canonicalId,
-      name: a.name,
-      quantity: a.quantity,
-      unit: a.unit,
+      groupKey: agg.groupKey,
+      displayName: agg.displayName,
+      memberCanonicalIdsInUse: memberIds,
+      usage: agg.usage,
+      quantity: agg.quantity,
+      unit: agg.unit,
       salePrice: pick?.salePrice ?? null,
       regularPrice: pick?.regularPrice ?? null,
+      cheapestMemberCanonicalId: cheapestCanonicalId,
+      cheapestMemberDisplayName: cheapestDisplayName,
       isChecked,
     };
     const section = pick && pick.salePrice !== null ? pick.retailer : NOT_ON_SALE;
@@ -126,7 +189,7 @@ export function buildShoppingListFromRows(inputs: ShoppingListInputs): ShoppingL
   let grandTotalOnSale = 0;
   let grandTotalAll = 0;
   bySection.forEach((items, retailer) => {
-    items.sort((a, b) => a.name.localeCompare(b.name));
+    items.sort((a, b) => a.displayName.localeCompare(b.displayName));
     let subtotal = 0;
     for (const it of items) {
       if (it.salePrice !== null) {
@@ -136,13 +199,12 @@ export function buildShoppingListFromRows(inputs: ShoppingListInputs): ShoppingL
       } else if (it.regularPrice !== null) {
         grandTotalAll += Math.ceil(it.quantity) * it.regularPrice;
       }
-      // else: no price info; contributes to neither total.
     }
     sections.push({ retailer, subtotal, items });
   });
   grandTotalAll += grandTotalOnSale;
 
-  // 5. Sort sections: on-sale sections by descending subtotal; NOT_ON_SALE always last.
+  // 5. Sort sections: on-sale by descending subtotal, NOT_ON_SALE always last.
   sections.sort((a, b) => {
     if (a.retailer === NOT_ON_SALE) return 1;
     if (b.retailer === NOT_ON_SALE) return -1;

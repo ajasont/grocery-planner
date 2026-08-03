@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Spies for shopping_list_checks (upsert / delete) and pantry (upsert).
-const checksUpsertSpy = vi.fn(async () => ({ error: null }));
-const checksDeleteCall = vi.fn(async () => ({ error: null }));
-const pantryUpsertSpy = vi.fn(async () => ({ error: null }));
+const checksUpsertSpy = vi.fn<(rows: unknown) => Promise<{ error: null }>>(async () => ({ error: null }));
+const checksDeleteCall = vi.fn<(ids: string[]) => Promise<{ error: null }>>(async () => ({ error: null }));
+const pantryUpsertSpy = vi.fn<(row: unknown) => Promise<{ error: null }>>(async () => ({ error: null }));
 
 vi.mock('@/lib/db/client', () => ({
   getServerClient: () => ({

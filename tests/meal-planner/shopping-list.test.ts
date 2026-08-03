@@ -343,4 +343,152 @@ describe('buildShoppingListFromRows — group rollup', () => {
     expect(section?.subtotal).toBeCloseTo(3.98, 2);
     expect(list.grandTotalOnSale).toBeCloseTo(3.98, 2);
   });
+
+  it('picks the cheapest member across retailers for the group', () => {
+    const list = buildShoppingListFromRows({
+      planId: 1,
+      weekOf: '2026-08-03',
+      pantryCanonicalIds: [],
+      checkedCanonicalIds: new Set(),
+      ingredients: [
+        ing({ canonicalId: 'pasta_penne', canonicalName: 'Penne', shoppingGroup: 'pasta', quantity: 1 }),
+        ing({ canonicalId: 'pasta_rigatoni', canonicalName: 'Rigatoni', shoppingGroup: 'pasta', quantity: 1 }),
+      ],
+      deals: [
+        deal({ canonicalId: 'pasta_penne', shoppingGroup: 'pasta', retailerName: 'Harris Teeter', salePrice: 2.99 }),
+        deal({ canonicalId: 'pasta_rigatoni', shoppingGroup: 'pasta', retailerName: 'Sprouts', salePrice: 1.49 }),
+      ],
+    });
+
+    const sprouts = list.sections.find((s) => s.retailer === 'Sprouts');
+    expect(sprouts, 'row should land under Sprouts (cheapest member)').toBeDefined();
+    expect(sprouts!.items[0].cheapestMemberCanonicalId).toBe('pasta_rigatoni');
+  });
+
+  it('produces one row per canonical when all shoppingGroups are null (regression)', () => {
+    const list = buildShoppingListFromRows({
+      planId: 1,
+      weekOf: '2026-08-03',
+      pantryCanonicalIds: [],
+      checkedCanonicalIds: new Set(),
+      ingredients: [
+        ing({ canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', shoppingGroup: null, quantity: 2 }),
+        ing({ canonicalId: 'yellow_onion', canonicalName: 'Yellow Onion', shoppingGroup: null, quantity: 1 }),
+      ],
+      deals: [
+        deal({ canonicalId: 'chicken_breast', shoppingGroup: null, retailerName: 'Harris Teeter', salePrice: 3.99 }),
+        deal({ canonicalId: 'yellow_onion', shoppingGroup: null, retailerName: 'Harris Teeter', salePrice: 0.99 }),
+      ],
+    });
+
+    const ht = list.sections.find((s) => s.retailer === 'Harris Teeter');
+    expect(ht?.items).toHaveLength(2);
+    const ids = ht!.items.map((i) => i.groupKey).sort();
+    expect(ids).toEqual(['chicken_breast', 'yellow_onion']);
+    for (const i of ht!.items) {
+      // For ungrouped rows, groupKey === canonicalId and displayName === canonicalName.
+      expect(i.memberCanonicalIdsInUse).toEqual([i.groupKey]);
+      expect(i.cheapestMemberCanonicalId).toBe(i.groupKey);
+    }
+  });
+
+  it('displays family name even when only one member of a group is used', () => {
+    const list = buildShoppingListFromRows({
+      planId: 1,
+      weekOf: '2026-08-03',
+      pantryCanonicalIds: [],
+      checkedCanonicalIds: new Set(),
+      ingredients: [
+        ing({ canonicalId: 'pasta_penne', canonicalName: 'Penne', shoppingGroup: 'pasta', quantity: 1 }),
+      ],
+      deals: [
+        deal({ canonicalId: 'pasta_penne', shoppingGroup: 'pasta', salePrice: 1.99 }),
+      ],
+    });
+
+    const ht = list.sections.find((s) => s.retailer === 'Harris Teeter');
+    const row = ht!.items[0];
+    expect(row.displayName).toBe('Pasta');
+    expect(row.memberCanonicalIdsInUse).toEqual(['pasta_penne']);
+    expect(row.usage).toHaveLength(1);
+    expect(row.cheapestMemberDisplayName).toBe('Penne');
+  });
+
+  it('places a group with no on-sale deals into the Not on sale section using regular price', () => {
+    const list = buildShoppingListFromRows({
+      planId: 1,
+      weekOf: '2026-08-03',
+      pantryCanonicalIds: [],
+      checkedCanonicalIds: new Set(),
+      ingredients: [
+        ing({ canonicalId: 'pasta_penne', canonicalName: 'Penne', shoppingGroup: 'pasta', quantity: 1 }),
+        ing({ canonicalId: 'pasta_rigatoni', canonicalName: 'Rigatoni', shoppingGroup: 'pasta', quantity: 1 }),
+      ],
+      deals: [
+        deal({ canonicalId: 'pasta_penne', shoppingGroup: 'pasta', salePrice: null, regularPrice: 2.99 }),
+        deal({ canonicalId: 'pasta_rigatoni', shoppingGroup: 'pasta', salePrice: null, regularPrice: 2.49 }),
+      ],
+    });
+
+    const nos = list.sections.find((s) => s.retailer === 'Not on sale');
+    expect(nos).toBeDefined();
+    const row = nos!.items[0];
+    expect(row.regularPrice).toBe(2.49);
+    expect(row.cheapestMemberCanonicalId).toBe('pasta_rigatoni');
+    // Regular-price groups do not contribute to grandTotalOnSale; only grandTotalAll.
+    expect(list.grandTotalOnSale).toBe(0);
+    expect(list.grandTotalAll).toBeCloseTo(Math.ceil(2) * 2.49, 2);
+  });
+
+  it('records each meal + shape combination in the usage list', () => {
+    const list = buildShoppingListFromRows({
+      planId: 1,
+      weekOf: '2026-08-03',
+      pantryCanonicalIds: [],
+      checkedCanonicalIds: new Set(),
+      ingredients: [
+        ing({ canonicalId: 'pasta_rigatoni', canonicalName: 'Rigatoni', shoppingGroup: 'pasta', quantity: 1, mealName: 'Rigatoni Bolognese', mealDay: 'Monday' }),
+        ing({ canonicalId: 'pasta_penne', canonicalName: 'Penne', shoppingGroup: 'pasta', quantity: 1, mealName: 'Penne Vodka', mealDay: 'Wednesday' }),
+      ],
+      deals: [
+        deal({ canonicalId: 'pasta_penne', shoppingGroup: 'pasta', salePrice: 1.99 }),
+        deal({ canonicalId: 'pasta_rigatoni', shoppingGroup: 'pasta', salePrice: 2.49 }),
+      ],
+    });
+
+    const ht = list.sections.find((s) => s.retailer === 'Harris Teeter');
+    const row = ht!.items[0];
+    expect(row.usage).toHaveLength(2);
+    const days = row.usage.map((u) => u.mealDay).sort();
+    expect(days).toEqual(['Monday', 'Wednesday']);
+    const shapes = row.usage.map((u) => u.canonicalDisplayName).sort();
+    expect(shapes).toEqual(['Penne', 'Rigatoni']);
+  });
+
+  it('marks a group as checked iff every member-in-use is in checkedCanonicalIds', () => {
+    const base = {
+      planId: 1,
+      weekOf: '2026-08-03',
+      pantryCanonicalIds: [] as readonly string[],
+      ingredients: [
+        ing({ canonicalId: 'pasta_penne', canonicalName: 'Penne', shoppingGroup: 'pasta', quantity: 1 }),
+        ing({ canonicalId: 'pasta_rigatoni', canonicalName: 'Rigatoni', shoppingGroup: 'pasta', quantity: 1 }),
+      ],
+      deals: [
+        deal({ canonicalId: 'pasta_penne', shoppingGroup: 'pasta', salePrice: 1.99 }),
+        deal({ canonicalId: 'pasta_rigatoni', shoppingGroup: 'pasta', salePrice: 2.49 }),
+      ],
+    };
+
+    const partial = buildShoppingListFromRows({ ...base, checkedCanonicalIds: new Set(['pasta_penne']) });
+    const partialRow = partial.sections.find((s) => s.retailer === 'Harris Teeter')!.items[0];
+    expect(partialRow.isChecked).toBe(false);
+
+    const full = buildShoppingListFromRows({
+      ...base,
+      checkedCanonicalIds: new Set(['pasta_penne', 'pasta_rigatoni']),
+    });
+    const fullRow = full.sections.find((s) => s.retailer === 'Harris Teeter')!.items[0];
+    expect(fullRow.isChecked).toBe(true);
+  });
 });

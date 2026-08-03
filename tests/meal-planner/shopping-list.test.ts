@@ -36,6 +36,7 @@ function deal(
 ): ShoppingListInputs['deals'][number] {
   return {
     canonicalId: 'x',
+    canonicalName: 'X',
     shoppingGroup: null,
     retailerName: 'Harris Teeter',
     salePrice: 1.99,
@@ -118,9 +119,9 @@ describe('buildShoppingListFromRows', () => {
           { canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', shoppingGroup: null, quantity: 1, unit: 'lb', mealName: 'Meal', mealDay: 'Monday' },
         ],
         deals: [
-          { canonicalId: 'chicken_breast', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 4.99, regularPrice: 5.99 },
-          { canonicalId: 'chicken_breast', shoppingGroup: null, retailerName: 'sprouts',       salePrice: 3.49, regularPrice: 6.49 },
-          { canonicalId: 'chicken_breast', shoppingGroup: null, retailerName: 'target',        salePrice: 5.99, regularPrice: 6.99 },
+          { canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 4.99, regularPrice: 5.99 },
+          { canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', shoppingGroup: null, retailerName: 'sprouts',       salePrice: 3.49, regularPrice: 6.49 },
+          { canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', shoppingGroup: null, retailerName: 'target',        salePrice: 5.99, regularPrice: 6.99 },
         ],
       })
     );
@@ -137,7 +138,7 @@ describe('buildShoppingListFromRows', () => {
           { canonicalId: 'basmati_rice', canonicalName: 'Basmati Rice', shoppingGroup: null, quantity: 1, unit: 'lb', mealName: 'Meal', mealDay: 'Monday' },
         ],
         deals: [
-          { canonicalId: 'basmati_rice', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: null, regularPrice: 3.99 },
+          { canonicalId: 'basmati_rice', canonicalName: 'Basmati Rice', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: null, regularPrice: 3.99 },
         ],
       })
     );
@@ -169,7 +170,7 @@ describe('buildShoppingListFromRows', () => {
           { canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', shoppingGroup: null, quantity: 0.5, unit: 'lb', mealName: 'Meal', mealDay: 'Monday' },
         ],
         deals: [
-          { canonicalId: 'chicken_breast', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 6.99, regularPrice: 8.99 },
+          { canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 6.99, regularPrice: 8.99 },
         ],
       })
     );
@@ -185,8 +186,8 @@ describe('buildShoppingListFromRows', () => {
           { canonicalId: 'basmati_rice',   canonicalName: 'Basmati Rice',   shoppingGroup: null, quantity: 2, unit: 'lb', mealName: 'Meal', mealDay: 'Monday' },
         ],
         deals: [
-          { canonicalId: 'chicken_breast', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 4.99, regularPrice: 5.99 },
-          { canonicalId: 'basmati_rice',   shoppingGroup: null, retailerName: 'harris-teeter', salePrice: null, regularPrice: 3.99 },
+          { canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 4.99, regularPrice: 5.99 },
+          { canonicalId: 'basmati_rice',   canonicalName: 'Basmati Rice',   shoppingGroup: null, retailerName: 'harris-teeter', salePrice: null, regularPrice: 3.99 },
         ],
       })
     );
@@ -203,8 +204,8 @@ describe('buildShoppingListFromRows', () => {
           { canonicalId: 'unmapped', canonicalName: 'Unmapped', shoppingGroup: null, quantity: 1, unit: 'ea', mealName: 'Meal', mealDay: 'Monday' },
         ],
         deals: [
-          { canonicalId: 'small_ht', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 1.00, regularPrice: 2.00 },
-          { canonicalId: 'big_sp',   shoppingGroup: null, retailerName: 'sprouts',       salePrice: 9.99, regularPrice: 12.99 },
+          { canonicalId: 'small_ht', canonicalName: 'Small HT', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 1.00, regularPrice: 2.00 },
+          { canonicalId: 'big_sp',   canonicalName: 'Big SP',   shoppingGroup: null, retailerName: 'sprouts',       salePrice: 9.99, regularPrice: 12.99 },
         ],
       })
     );
@@ -220,8 +221,8 @@ describe('buildShoppingListFromRows', () => {
           { canonicalId: 'apple',    canonicalName: 'Apple',    shoppingGroup: null, quantity: 1, unit: 'ea', mealName: 'Meal', mealDay: 'Monday' },
         ],
         deals: [
-          { canonicalId: 'zucchini', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 1.99, regularPrice: 2.99 },
-          { canonicalId: 'apple',    shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 0.99, regularPrice: 1.49 },
+          { canonicalId: 'zucchini', canonicalName: 'Zucchini', shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 1.99, regularPrice: 2.99 },
+          { canonicalId: 'apple',    canonicalName: 'Apple',    shoppingGroup: null, retailerName: 'harris-teeter', salePrice: 0.99, regularPrice: 1.49 },
         ],
       })
     );
@@ -344,6 +345,28 @@ describe('buildShoppingListFromRows — group rollup', () => {
     expect(list.grandTotalOnSale).toBeCloseTo(3.98, 2);
   });
 
+  it('resolves cheapestMemberDisplayName from deal name when that shape is not in the plan', () => {
+    // Only Spaghetti is used in this week's meals, but Penne is the cheapest
+    // on-sale shape. The "cheapest: Penne" recommendation must still surface.
+    const list = buildShoppingListFromRows({
+      planId: 1,
+      weekOf: '2026-08-03',
+      pantryCanonicalIds: [],
+      checkedCanonicalIds: new Set(),
+      ingredients: [
+        ing({ canonicalId: 'pasta_spaghetti', canonicalName: 'Spaghetti', shoppingGroup: 'pasta', quantity: 1 }),
+      ],
+      deals: [
+        deal({ canonicalId: 'pasta_spaghetti', canonicalName: 'Spaghetti', shoppingGroup: 'pasta', salePrice: 2.99 }),
+        deal({ canonicalId: 'pasta_penne', canonicalName: 'Penne', shoppingGroup: 'pasta', salePrice: 1.18 }),
+      ],
+    });
+    const row = list.sections.flatMap((s) => s.items).find((i) => i.groupKey === 'pasta');
+    expect(row?.cheapestMemberCanonicalId).toBe('pasta_penne');
+    expect(row?.cheapestMemberDisplayName).toBe('Penne');
+    expect(row?.displayName).toBe('Pasta');
+  });
+
   it('picks the cheapest member across retailers for the group', () => {
     const list = buildShoppingListFromRows({
       planId: 1,
@@ -376,7 +399,7 @@ describe('buildShoppingListFromRows — group rollup', () => {
         ing({ canonicalId: 'yellow_onion', canonicalName: 'Yellow Onion', shoppingGroup: null, quantity: 1 }),
       ],
       deals: [
-        deal({ canonicalId: 'chicken_breast', shoppingGroup: null, retailerName: 'Harris Teeter', salePrice: 3.99 }),
+        deal({ canonicalId: 'chicken_breast', canonicalName: 'Chicken Breast', shoppingGroup: null, retailerName: 'Harris Teeter', salePrice: 3.99 }),
         deal({ canonicalId: 'yellow_onion', shoppingGroup: null, retailerName: 'Harris Teeter', salePrice: 0.99 }),
       ],
     });

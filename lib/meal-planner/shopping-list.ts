@@ -15,6 +15,7 @@ export type ShoppingListInputs = {
   }>;
   deals: ReadonlyArray<{
     canonicalId: string;
+    canonicalName: string;
     shoppingGroup: string | null;
     retailerName: string;
     salePrice: number | null;
@@ -129,6 +130,14 @@ export function buildShoppingListFromRows(inputs: ShoppingListInputs): ShoppingL
     const list = dealsByGroup.get(key) ?? [];
     list.push(d);
     dealsByGroup.set(key, list);
+    // Deals can name a group member that no meal in this plan uses (e.g., penne
+    // on sale but this week only cooks spaghetti). Register the name so the
+    // "cheapest: X" recommendation can still show a specific shape. The
+    // ingredient-supplied name (from earlier) wins if both sources have one.
+    const agg = byGroup.get(key);
+    if (agg && !agg.memberIdToName.has(d.canonicalId)) {
+      agg.memberIdToName.set(d.canonicalId, d.canonicalName);
+    }
   }
   const pickByGroup = new Map<string, Pick>();
   dealsByGroup.forEach((rows, groupKey) => {
@@ -247,7 +256,7 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
     regular_price: number | null;
     retailer_skus: {
       canonical_ingredient_id: string | null;
-      canonical_ingredients: { shopping_group: string | null } | null;
+      canonical_ingredients: { name: string; shopping_group: string | null } | null;
       retailers: { name: string };
     };
   };
@@ -267,7 +276,7 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
       .select(
         `sale_price, regular_price,
          retailer_skus!inner (canonical_ingredient_id,
-           canonical_ingredients (shopping_group),
+           canonical_ingredients (name, shopping_group),
            retailers!inner (name))`
       )
       .eq('week_of', weekOf),
@@ -304,6 +313,9 @@ export async function buildShoppingList(plan: PlanRow): Promise<ShoppingList> {
     .filter((r) => r.retailer_skus.canonical_ingredient_id !== null)
     .map((r) => ({
       canonicalId: r.retailer_skus.canonical_ingredient_id as string,
+      canonicalName:
+        r.retailer_skus.canonical_ingredients?.name ??
+        (r.retailer_skus.canonical_ingredient_id as string),
       shoppingGroup: r.retailer_skus.canonical_ingredients?.shopping_group ?? null,
       retailerName: r.retailer_skus.retailers.name,
       salePrice: r.sale_price,

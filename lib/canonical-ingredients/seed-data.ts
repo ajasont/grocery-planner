@@ -82,6 +82,7 @@ export const CANONICAL_INGREDIENTS: CanonicalIngredient[] = [
   { id: 'italian_sausage', name: 'Italian Sausage', category: 'pork', default_unit: 'lb', aisle_group: 'meat', shopping_group: null },
   { id: 'ground_turkey', name: 'Ground Turkey', category: 'poultry', default_unit: 'lb', aisle_group: 'meat', shopping_group: null },
   { id: 'turkey_breast', name: 'Turkey Breast', category: 'poultry', default_unit: 'lb', aisle_group: 'meat', shopping_group: null },
+  { id: 'turkey_sausage', name: 'Turkey Sausage', category: 'poultry', default_unit: 'lb', aisle_group: 'meat', shopping_group: null },
 
   // Seafood
   { id: 'salmon_fillet', name: 'Salmon Fillet', category: 'seafood', default_unit: 'lb', aisle_group: 'seafood', shopping_group: null },
@@ -89,6 +90,7 @@ export const CANONICAL_INGREDIENTS: CanonicalIngredient[] = [
   { id: 'shrimp', name: 'Shrimp', category: 'seafood', default_unit: 'lb', aisle_group: 'seafood', shopping_group: null },
   { id: 'cod_fillet', name: 'Cod Fillet', category: 'seafood', default_unit: 'lb', aisle_group: 'seafood', shopping_group: null },
   { id: 'tilapia_fillet', name: 'Tilapia Fillet', category: 'seafood', default_unit: 'lb', aisle_group: 'seafood', shopping_group: null },
+  { id: 'mahi_mahi', name: 'Mahi Mahi', category: 'seafood', default_unit: 'lb', aisle_group: 'seafood', shopping_group: null },
   { id: 'tuna_canned', name: 'Canned Tuna', category: 'seafood', default_unit: 'can', aisle_group: 'pantry', shopping_group: null },
   { id: 'sardines_canned', name: 'Canned Sardines', category: 'seafood', default_unit: 'can', aisle_group: 'pantry', shopping_group: null },
 
@@ -99,6 +101,7 @@ export const CANONICAL_INGREDIENTS: CanonicalIngredient[] = [
   { id: 'milk_skim', name: 'Skim Milk', category: 'dairy', default_unit: 'gal', aisle_group: 'dairy', shopping_group: null },
   { id: 'butter_unsalted', name: 'Unsalted Butter', category: 'dairy', default_unit: 'lb', aisle_group: 'dairy', shopping_group: null },
   { id: 'butter_salted', name: 'Salted Butter', category: 'dairy', default_unit: 'lb', aisle_group: 'dairy', shopping_group: null },
+  { id: 'margarine', name: 'Margarine', category: 'dairy', default_unit: 'lb', aisle_group: 'dairy', shopping_group: null },
   { id: 'heavy_cream', name: 'Heavy Cream', category: 'dairy', default_unit: 'pint', aisle_group: 'dairy', shopping_group: null },
   { id: 'sour_cream', name: 'Sour Cream', category: 'dairy', default_unit: 'oz', aisle_group: 'dairy', shopping_group: null },
   { id: 'greek_yogurt_plain', name: 'Plain Greek Yogurt', category: 'dairy', default_unit: 'oz', aisle_group: 'dairy', shopping_group: null },

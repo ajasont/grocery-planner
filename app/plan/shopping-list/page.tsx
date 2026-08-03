@@ -28,7 +28,6 @@ export default async function ShoppingListPage() {
     .maybeSingle();
 
   if (!planRow) {
-    // No plan yet — send user to /plan where they'll see the empty-state generate button.
     redirect('/plan');
   }
 
@@ -75,14 +74,22 @@ export default async function ShoppingListPage() {
             <ul>
               {section.items.map((item) => {
                 const qtyStr = qty(item.quantity, item.unit);
+                // "used in" sub-line is only informative for actual groups
+                // (multiple different members) — hide it for ungrouped rows.
+                const showUsage =
+                  item.memberCanonicalIdsInUse.length > 1 && item.usage.length > 0;
+                // "cheapest: X" sub-line is only informative for actual groups.
+                const showCheapest =
+                  item.memberCanonicalIdsInUse.length > 1 &&
+                  item.cheapestMemberDisplayName !== item.displayName;
                 return (
-                  <li key={item.canonicalId}>
+                  <li key={item.groupKey} className="mb-2">
                     <ShoppingItemCheckbox
                       planId={list.planId}
-                      canonicalId={item.canonicalId}
+                      memberCanonicalIds={item.memberCanonicalIdsInUse}
                       initialChecked={item.isChecked}
                     >
-                      <span>{item.name}</span>
+                      <span>{item.displayName}</span>
                       <span className="text-sm text-gray-500">
                         {qtyStr && ` · ${qtyStr}`}
                         {item.salePrice !== null && ` · ${fmt(item.salePrice)}`}
@@ -91,6 +98,19 @@ export default async function ShoppingListPage() {
                         {item.salePrice === null && item.regularPrice === null && ' · —'}
                       </span>
                     </ShoppingItemCheckbox>
+                    {showCheapest && (
+                      <p className="ml-7 mt-0.5 text-xs text-gray-500">
+                        cheapest: {item.cheapestMemberDisplayName}
+                      </p>
+                    )}
+                    {showUsage && (
+                      <p className="ml-7 text-xs text-gray-500">
+                        used in:{' '}
+                        {item.usage
+                          .map((u) => `${u.mealDay}'s ${u.mealName} (${u.canonicalDisplayName})`)
+                          .join(', ')}
+                      </p>
+                    )}
                   </li>
                 );
               })}

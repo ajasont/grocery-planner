@@ -7,7 +7,10 @@ vi.mock('@/lib/normalization/mapper', () => ({
 }));
 
 // Mock the DB client
-const mockUpdateEq = vi.fn(async () => ({ error: null }));
+type UpdateEqResult = { error: { message: string } | null };
+const mockUpdateEq = vi.fn<
+  (payload: unknown, col: string, val: unknown) => Promise<UpdateEqResult>
+>(async () => ({ error: null }));
 const mockUpdate = vi.fn((payload: unknown) => ({
   eq: (col: string, val: unknown) => mockUpdateEq(payload, col, val),
 }));

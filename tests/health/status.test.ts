@@ -80,6 +80,34 @@ function jobRunRow(
   };
 }
 
+function jobRunRowWithClassifier(
+  runAt: string,
+  status: 'OK' | 'FAILED',
+  counts: { mapped: number; skipped: number; failed: number },
+  classifier: {
+    status: 'OK' | 'FAILED' | null;
+    classified?: number;
+    flagged?: number;
+    failed?: number;
+    error?: string | null;
+  } = { status: null },
+  error: string | null = null
+) {
+  return {
+    run_at: runAt,
+    mapper_status: status,
+    mapper_mapped: counts.mapped,
+    mapper_skipped: counts.skipped,
+    mapper_failed: counts.failed,
+    mapper_error: error,
+    classifier_status: classifier.status,
+    classifier_classified: classifier.classified ?? 0,
+    classifier_flagged: classifier.flagged ?? 0,
+    classifier_failed: classifier.failed ?? 0,
+    classifier_error: classifier.error ?? null,
+  };
+}
+
 describe('STALE_THRESHOLD_MS', () => {
   it('is 8 days in milliseconds', () => {
     expect(STALE_THRESHOLD_MS).toBe(8 * 24 * 60 * 60 * 1000);
@@ -436,5 +464,115 @@ describe('computeHealth — mapperHistoryStale (silent-failure detection)', () =
     });
     health = await computeHealth();
     expect(health.mapperHistoryStale).toBe(true);
+  });
+});
+
+describe('computeHealth — classifier', () => {
+  it('derives classifier from the newest job_runs row when classifier_status is present', async () => {
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', '2026-08-16T14:05:00.000Z'),
+        retailerHealthRow('sprouts', 'OK', '2026-08-16T14:07:00.000Z'),
+      ],
+      error: null,
+    });
+    jobRunsRowsSpy.mockResolvedValueOnce({
+      data: [
+        jobRunRowWithClassifier(
+          '2026-08-16T14:10:00.000Z',
+          'OK',
+          { mapped: 100, skipped: 5, failed: 0 },
+          { status: 'OK', classified: 57, flagged: 12, failed: 0, error: null }
+        ),
+      ],
+      error: null,
+    });
+
+    const health = await computeHealth();
+
+    expect(health.classifier).toEqual({
+      runAt: '2026-08-16T14:10:00.000Z',
+      status: 'OK',
+      classified: 57,
+      flagged: 12,
+      failed: 0,
+      error: null,
+    });
+    expect(health.hasProblem).toBe(false);
+  });
+
+  it('is null when the newest job_runs row has classifier_status NULL (pre-migration history)', async () => {
+    const now = new Date('2026-08-03T10:00:00.000Z');
+    vi.setSystemTime(now);
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', '2026-08-02T14:05:00.000Z'),
+        retailerHealthRow('sprouts', 'OK', '2026-08-02T14:07:00.000Z'),
+      ],
+      error: null,
+    });
+    jobRunsRowsSpy.mockResolvedValueOnce({
+      data: [
+        jobRunRowWithClassifier(
+          '2026-08-02T14:10:00.000Z',
+          'OK',
+          { mapped: 100, skipped: 5, failed: 0 },
+          { status: null }
+        ),
+      ],
+      error: null,
+    });
+
+    const health = await computeHealth();
+
+    expect(health.classifier).toBeNull();
+    expect(health.hasProblem).toBe(false);
+  });
+
+  it('is null when there are no job_runs at all', async () => {
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', '2026-08-16T14:05:00.000Z'),
+        retailerHealthRow('sprouts', 'OK', '2026-08-16T14:07:00.000Z'),
+      ],
+      error: null,
+    });
+    // job_runs stays empty (default mock).
+
+    const health = await computeHealth();
+    expect(health.classifier).toBeNull();
+  });
+
+  it('sets hasProblem=true when classifier status is FAILED, retailers and mapper OK', async () => {
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', '2026-08-16T14:05:00.000Z'),
+        retailerHealthRow('sprouts', 'OK', '2026-08-16T14:07:00.000Z'),
+      ],
+      error: null,
+    });
+    jobRunsRowsSpy.mockResolvedValueOnce({
+      data: [
+        jobRunRowWithClassifier(
+          '2026-08-16T14:10:00.000Z',
+          'OK',
+          { mapped: 100, skipped: 5, failed: 0 },
+          {
+            status: 'FAILED',
+            classified: 0,
+            flagged: 0,
+            failed: 0,
+            error: 'Anthropic 503',
+          }
+        ),
+      ],
+      error: null,
+    });
+
+    const health = await computeHealth();
+
+    expect(health.classifier?.status).toBe('FAILED');
+    expect(health.classifier?.error).toBe('Anthropic 503');
+    expect(health.hasProblem).toBe(true);
   });
 });

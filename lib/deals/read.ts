@@ -18,6 +18,7 @@ export async function getCurrentWeekOnSaleDeals(
     )
     .eq('week_of', weekOf)
     .not('sale_price', 'is', null)
+    .not('retailer_skus.is_ingredient', 'is', false)
     .order('sale_price', { ascending: true });
 
   if (error) throw error;

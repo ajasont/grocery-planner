@@ -9,11 +9,14 @@ export async function runMappingForUnmappedSkus(): Promise<{
   const supabase = getServerClient();
 
   // Fetch SKUs that have no mapping and haven't been manually verified.
+  // Exclude rows the classifier flagged as non-ingredients (is_ingredient=false);
+  // null (not yet classified) still passes through.
   const { data, error } = await supabase
     .from('retailer_skus')
     .select('id, product_name')
     .is('canonical_ingredient_id', null)
-    .eq('mapping_verified', false);
+    .eq('mapping_verified', false)
+    .not('is_ingredient', 'is', false);
   if (error) throw error;
   const rows = (data ?? []) as Array<{ id: number; product_name: string }>;
   if (rows.length === 0) return { mapped: 0, skipped: 0, failed: 0 };

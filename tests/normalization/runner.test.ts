@@ -15,13 +15,18 @@ const mockUpdate = vi.fn((payload: unknown) => ({
   eq: (col: string, val: unknown) => mockUpdateEq(payload, col, val),
 }));
 const mockSelect = vi.fn();
+const mockNot = vi.fn((_col: string, _op: string, _val: unknown) => mockSelect());
 vi.mock('@/lib/db/client', () => ({
   getServerClient: () => ({
     from: (table: string) => {
       if (table === 'retailer_skus') {
         return {
           select: () => ({
-            is: () => ({ eq: () => mockSelect() }),
+            is: () => ({
+              eq: () => ({
+                not: (col: string, op: string, val: unknown) => mockNot(col, op, val),
+              }),
+            }),
           }),
           update: mockUpdate,
         };
@@ -38,6 +43,7 @@ beforeEach(() => {
   mockUpdate.mockClear();
   mockUpdateEq.mockReset().mockResolvedValue({ error: null });
   mockSelect.mockReset();
+  mockNot.mockClear();
 });
 
 describe('runMappingForUnmappedSkus', () => {
@@ -94,6 +100,14 @@ describe('runMappingForUnmappedSkus', () => {
     expect(mockMap).not.toHaveBeenCalled();
     expect(mockUpdateEq).not.toHaveBeenCalled();
     expect(result).toEqual({ mapped: 0, skipped: 0, failed: 0 });
+  });
+
+  it('filters out rows already classified as non-ingredients', async () => {
+    mockSelect.mockResolvedValueOnce({ data: [], error: null });
+
+    await runMappingForUnmappedSkus();
+
+    expect(mockNot).toHaveBeenCalledWith('is_ingredient', 'is', false);
   });
 
   it('counts DB update failures without aborting the whole batch', async () => {

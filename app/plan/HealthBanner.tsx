@@ -6,10 +6,13 @@ function bannerMessage(health: HealthSnapshot): string {
   const problemRetailers = health.retailers.filter((r) => r.status !== 'OK');
   const mapperFailed =
     health.mapper !== null && health.mapper.status === 'FAILED';
+  const classifierFailed =
+    health.classifier !== null && health.classifier.status === 'FAILED';
 
   const problemCount =
     problemRetailers.length +
     (mapperFailed ? 1 : 0) +
+    (classifierFailed ? 1 : 0) +
     (health.mapperHistoryStale ? 1 : 0);
 
   if (problemCount >= 2) {
@@ -40,6 +43,10 @@ function bannerMessage(health: HealthSnapshot): string {
 
   if (mapperFailed) {
     return 'Ingredient mapping failed on last refresh';
+  }
+
+  if (classifierFailed) {
+    return 'Ingredient classifier failed on last refresh';
   }
 
   if (health.mapperHistoryStale) {

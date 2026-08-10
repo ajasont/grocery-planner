@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { refreshRetailer, type RefreshResult } from '@/lib/ingestion/refresh';
+import { runClassificationForUnclassifiedFlippSkus } from '@/lib/normalization/classifier-runner';
 import { runMappingForUnmappedSkus } from '@/lib/normalization/runner';
 import { getServerClient } from '@/lib/db/client';
 
@@ -28,6 +29,31 @@ export async function GET(req: NextRequest) {
         }
   );
 
+  // Classifier runs before the mapper so bad rows are gated out of the mapper's select.
+  // Failure here does NOT abort the mapper — recorded in job_runs and surfaced on /health.
+  let classifier: {
+    classified: number;
+    flagged: number;
+    failed: number;
+    error: string | null;
+  };
+  try {
+    const c = await runClassificationForUnclassifiedFlippSkus();
+    classifier = {
+      classified: c.classified,
+      flagged: c.flagged,
+      failed: c.failed,
+      error: null,
+    };
+  } catch (err) {
+    classifier = {
+      classified: 0,
+      flagged: 0,
+      failed: 0,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+
   let mapper: {
     mapped: number;
     skipped: number;
@@ -48,9 +74,15 @@ export async function GET(req: NextRequest) {
 
   // Best-effort append to job_runs. A failed write here does not mask the
   // real result: the caller and Vercel logs still show the response envelope.
+  // Divergence detection on /health surfaces silent write failures.
   try {
     const supabase = getServerClient();
     const { error } = await supabase.from('job_runs').insert({
+      classifier_status: classifier.error === null ? 'OK' : 'FAILED',
+      classifier_classified: classifier.classified,
+      classifier_flagged: classifier.flagged,
+      classifier_failed: classifier.failed,
+      classifier_error: classifier.error,
       mapper_status: mapper.error === null ? 'OK' : 'FAILED',
       mapper_mapped: mapper.mapped,
       mapper_skipped: mapper.skipped,
@@ -70,6 +102,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     runAt: new Date().toISOString(),
     results,
+    classifier,
     mapper,
   });
 }

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { computeHealth } from '@/lib/health/status';
-import type { RetailerStatus, MapperStatus } from '@/lib/health/status';
+import type { RetailerStatus, MapperStatus, ClassifierStatus } from '@/lib/health/status';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,6 +76,18 @@ function MapperCard({ m }: { m: MapperStatus }) {
   );
 }
 
+function ClassifierCard({ c }: { c: ClassifierStatus }) {
+  return (
+    <div className="rounded border p-3">
+      <p className="font-medium">Classifier — last run</p>
+      <p className={`text-sm ${c.status === 'OK' ? 'text-green-700' : 'text-red-700'}`}>
+        {fmtRunAt(c.runAt)} — {c.status} — {c.classified} classified / {c.flagged} flagged / {c.failed} failed
+      </p>
+      {c.error && <p className="mt-1 text-xs text-red-700">Error: {c.error}</p>}
+    </div>
+  );
+}
+
 export default async function HealthPage() {
   const health = await computeHealth();
   const overall = health.hasProblem ? 'Refresh problem detected' : 'All systems healthy';
@@ -131,6 +143,17 @@ export default async function HealthPage() {
           </p>
         ) : (
           <MapperCard m={health.mapper} />
+        )}
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 text-lg font-semibold">Classifier</h2>
+        {health.classifier === null ? (
+          <p className="text-sm text-neutral-500">
+            No classifier runs yet. First scheduled run: Sunday 14:00 UTC.
+          </p>
+        ) : (
+          <ClassifierCard c={health.classifier} />
         )}
       </section>
 

@@ -35,10 +35,20 @@ export type MapperStatus = {
   error: string | null;
 };
 
+export type ClassifierStatus = {
+  runAt: string;
+  status: 'OK' | 'FAILED';
+  classified: number;
+  flagged: number;
+  failed: number;
+  error: string | null;
+};
+
 export type HealthSnapshot = {
   hasProblem: boolean;
   retailers: RetailerStatus[];
   mapper: MapperStatus | null;
+  classifier: ClassifierStatus | null;
   history: MapperStatus[];
   // True when a retailer refresh landed but the paired job_runs row didn't —
   // catches silent write-side failures like a dropped table.
@@ -59,6 +69,11 @@ type JobRunRow = {
   mapper_skipped: number;
   mapper_failed: number;
   mapper_error: string | null;
+  classifier_status: 'OK' | 'FAILED' | null;
+  classifier_classified: number;
+  classifier_flagged: number;
+  classifier_failed: number;
+  classifier_error: string | null;
 };
 
 function classifyRetailer(
@@ -107,6 +122,18 @@ function toMapperStatus(row: JobRunRow): MapperStatus {
   };
 }
 
+function toClassifierStatus(row: JobRunRow): ClassifierStatus | null {
+  if (row.classifier_status === null) return null;
+  return {
+    runAt: row.run_at,
+    status: row.classifier_status,
+    classified: row.classifier_classified,
+    flagged: row.classifier_flagged,
+    failed: row.classifier_failed,
+    error: row.classifier_error,
+  };
+}
+
 export async function computeHealth(): Promise<HealthSnapshot> {
   const supabase = getServerClient();
 
@@ -126,7 +153,7 @@ export async function computeHealth(): Promise<HealthSnapshot> {
   const jobRunsRes = (await supabase
     .from('job_runs')
     .select(
-      'run_at, mapper_status, mapper_mapped, mapper_skipped, mapper_failed, mapper_error'
+      'run_at, mapper_status, mapper_mapped, mapper_skipped, mapper_failed, mapper_error, classifier_status, classifier_classified, classifier_flagged, classifier_failed, classifier_error'
     )
     .order('run_at', { ascending: false })
     .limit(5)) as { data: JobRunRow[] | null; error: unknown };
@@ -147,6 +174,7 @@ export async function computeHealth(): Promise<HealthSnapshot> {
   );
 
   const mapper = jobRunRows.length > 0 ? toMapperStatus(jobRunRows[0]) : null;
+  const classifier = jobRunRows.length > 0 ? toClassifierStatus(jobRunRows[0]) : null;
   const history = jobRunRows.slice(1).map(toMapperStatus);
 
   const newestRetailerMs = retailers.reduce<number | null>((max, r) => {
@@ -163,7 +191,8 @@ export async function computeHealth(): Promise<HealthSnapshot> {
   const hasProblem =
     retailers.some((r) => r.status !== 'OK') ||
     (mapper !== null && mapper.status === 'FAILED') ||
+    (classifier !== null && classifier.status === 'FAILED') ||
     mapperHistoryStale;
 
-  return { hasProblem, retailers, mapper, history, mapperHistoryStale };
+  return { hasProblem, retailers, mapper, classifier, history, mapperHistoryStale };
 }

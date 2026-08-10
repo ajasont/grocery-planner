@@ -100,4 +100,55 @@ describe('classifyProductNames', () => {
     // "When in doubt, return true" safety net.
     expect(args.system).toMatch(/doubt/i);
   });
+
+  it('batches large inputs into multiple Haiku calls (BATCH_SIZE=20)', async () => {
+    // 25 items → 2 batches (20 + 5). Each batch's Haiku response uses local indices.
+    const names = Array.from({ length: 25 }, (_, i) => `Item ${i}`);
+
+    mockCreate.mockResolvedValueOnce({
+      content: [
+        {
+          type: 'tool_use',
+          name: 'classify_ingredients',
+          input: {
+            classifications: Array.from({ length: 20 }, (_, i) => ({
+              index: i,
+              is_ingredient: true,
+              confidence: 0.9,
+              reason: 'batch1',
+            })),
+          },
+        },
+      ],
+    });
+    mockCreate.mockResolvedValueOnce({
+      content: [
+        {
+          type: 'tool_use',
+          name: 'classify_ingredients',
+          input: {
+            classifications: Array.from({ length: 5 }, (_, i) => ({
+              index: i,
+              is_ingredient: false,
+              confidence: 0.8,
+              reason: 'batch2',
+            })),
+          },
+        },
+      ],
+    });
+
+    const result = await classifyProductNames(names);
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(result).toHaveLength(25);
+    // First batch: indices 0-19, is_ingredient=true
+    expect(result[0].reason).toBe('batch1');
+    expect(result[19].reason).toBe('batch1');
+    expect(result[19].is_ingredient).toBe(true);
+    // Second batch: indices 20-24, is_ingredient=false (proves global-index translation)
+    expect(result[20].reason).toBe('batch2');
+    expect(result[24].reason).toBe('batch2');
+    expect(result[24].is_ingredient).toBe(false);
+  });
 });

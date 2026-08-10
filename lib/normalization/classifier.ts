@@ -7,6 +7,7 @@ export type ClassificationResult = {
 };
 
 const MODEL = 'claude-haiku-4-5-20251001';
+const BATCH_SIZE = 20;
 
 const SYSTEM_PROMPT = `You are classifying grocery-store flyer items to decide whether each one is a food ingredient — something a person would use to cook a meal or eat as a component of a meal.
 
@@ -61,40 +62,44 @@ export async function classifyProductNames(
     .fill(null)
     .map(() => ({ is_ingredient: true, confidence: 0, reason: '' }));
 
-  const numbered = names.map((n, i) => `${i}. ${n}`).join('\n');
+  for (let start = 0; start < names.length; start += BATCH_SIZE) {
+    const batch = names.slice(start, start + BATCH_SIZE);
+    const numbered = batch.map((n, i) => `${i}. ${n}`).join('\n');
 
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 2048,
-    system: SYSTEM_PROMPT,
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 2048,
+      system: SYSTEM_PROMPT,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [TOOL as any],
+      tool_choice: { type: 'tool', name: 'classify_ingredients' },
+      messages: [
+        {
+          role: 'user',
+          content: `Classify these product names:\n${numbered}`,
+        },
+      ],
+    });
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tools: [TOOL as any],
-    tool_choice: { type: 'tool', name: 'classify_ingredients' },
-    messages: [
-      {
-        role: 'user',
-        content: `Classify these product names:\n${numbered}`,
-      },
-    ],
-  });
+    const toolUse = (response.content as any[]).find((b) => b.type === 'tool_use');
+    if (!toolUse) continue;
+    const classifications = (toolUse.input?.classifications ?? []) as Array<{
+      index: number;
+      is_ingredient: boolean;
+      confidence: number;
+      reason: string;
+    }>;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const toolUse = (response.content as any[]).find((b) => b.type === 'tool_use');
-  if (!toolUse) return results;
-  const classifications = (toolUse.input?.classifications ?? []) as Array<{
-    index: number;
-    is_ingredient: boolean;
-    confidence: number;
-    reason: string;
-  }>;
-
-  for (const c of classifications) {
-    if (c.index < 0 || c.index >= names.length) continue;
-    results[c.index] = {
-      is_ingredient: typeof c.is_ingredient === 'boolean' ? c.is_ingredient : true,
-      confidence: typeof c.confidence === 'number' ? c.confidence : 0,
-      reason: typeof c.reason === 'string' ? c.reason : '',
-    };
+    for (const c of classifications) {
+      const globalIdx = start + c.index;
+      if (globalIdx < 0 || globalIdx >= names.length) continue;
+      results[globalIdx] = {
+        is_ingredient: typeof c.is_ingredient === 'boolean' ? c.is_ingredient : true,
+        confidence: typeof c.confidence === 'number' ? c.confidence : 0,
+        reason: typeof c.reason === 'string' ? c.reason : '',
+      };
+    }
   }
 
   return results;

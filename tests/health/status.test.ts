@@ -38,7 +38,11 @@ vi.mock('@/lib/db/client', () => ({
   }),
 }));
 
-import { computeHealth, STALE_THRESHOLD_MS } from '@/lib/health/status';
+import {
+  computeHealth,
+  STALE_THRESHOLD_MS,
+  MAPPER_HISTORY_STALE_MS,
+} from '@/lib/health/status';
 
 beforeEach(() => {
   vi.useRealTimers();
@@ -273,7 +277,9 @@ describe('computeHealth — mapper and history split', () => {
   });
 
   it('returns mapper: null and history: [] when there are no job_runs yet', async () => {
-    // First-ever state: retailer_health has rows but job_runs is empty.
+    // retailer_health has rows but job_runs is empty. Under the divergence-detection
+    // semantics that's now a `mapperHistoryStale` signal (covered separately) — this
+    // test focuses just on the shape of `mapper` and `history`.
     retailerHealthRowsSpy.mockResolvedValueOnce({
       data: [
         retailerHealthRow('harris-teeter', 'OK', new Date().toISOString()),
@@ -286,8 +292,6 @@ describe('computeHealth — mapper and history split', () => {
 
     expect(health.mapper).toBeNull();
     expect(health.history).toEqual([]);
-    // No mapper history is not itself a problem — retailers can be OK.
-    expect(health.hasProblem).toBe(false);
   });
 
   it('degrades gracefully when the job_runs read fails (table missing, PostgREST error, etc.)', async () => {
@@ -312,6 +316,125 @@ describe('computeHealth — mapper and history split', () => {
     expect(health.history).toEqual([]);
     expect(health.retailers).toHaveLength(2);
     expect(health.retailers.every((r) => r.status === 'OK')).toBe(true);
+    // When job_runs is unreadable but retailer_health shows recent successes,
+    // we've lost visibility to mapper history — surface it as a problem.
+    expect(health.mapperHistoryStale).toBe(true);
+    expect(health.hasProblem).toBe(true);
+  });
+});
+
+describe('computeHealth — mapperHistoryStale (silent-failure detection)', () => {
+  it('MAPPER_HISTORY_STALE_MS is one hour', () => {
+    expect(MAPPER_HISTORY_STALE_MS).toBe(60 * 60 * 1000);
+  });
+
+  it('is false when both retailer_health and job_runs are empty (first-ever state)', async () => {
+    // Defaults: both empty. Retailers will be NEVER (a separate problem signal),
+    // but there's no divergence to detect yet.
+    const health = await computeHealth();
+    expect(health.mapperHistoryStale).toBe(false);
+  });
+
+  it('is true when retailers have a recent success but job_runs is empty', async () => {
+    // Real scenario: table was dropped, retailer_health survived, cron writes to job_runs silently no-op.
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', new Date().toISOString()),
+        retailerHealthRow('sprouts', 'OK', new Date().toISOString()),
+      ],
+      error: null,
+    });
+    // job_runs stays empty.
+    const health = await computeHealth();
+    expect(health.mapperHistoryStale).toBe(true);
+    expect(health.hasProblem).toBe(true);
+  });
+
+  it('is false when retailer newest success matches job_runs newest run_at within threshold', async () => {
+    const t = '2026-08-09T15:00:00.000Z';
+    const t5s = '2026-08-09T15:00:05.000Z'; // 5s later — well within 1h threshold
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', t),
+        retailerHealthRow('sprouts', 'OK', t5s),
+      ],
+      error: null,
+    });
+    jobRunsRowsSpy.mockResolvedValueOnce({
+      data: [jobRunRow(t, 'OK', { mapped: 100, skipped: 5, failed: 0 })],
+      error: null,
+    });
+    const health = await computeHealth();
+    expect(health.mapperHistoryStale).toBe(false);
     expect(health.hasProblem).toBe(false);
+  });
+
+  it('is true when retailer newest success is > 1h newer than newest job_runs (partial-failure divergence)', async () => {
+    // Last week both wrote; this week only retailer_health wrote (job_runs insert failed silently).
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', '2026-08-09T15:00:00.000Z'),
+        retailerHealthRow('sprouts', 'OK', '2026-08-09T14:59:47.000Z'),
+      ],
+      error: null,
+    });
+    jobRunsRowsSpy.mockResolvedValueOnce({
+      data: [jobRunRow('2026-08-02T14:10:00.000Z', 'OK', { mapped: 100, skipped: 5, failed: 0 })],
+      error: null,
+    });
+    const health = await computeHealth();
+    expect(health.mapperHistoryStale).toBe(true);
+    expect(health.hasProblem).toBe(true);
+  });
+
+  it('is false when job_runs is newer than any retailer_health (no partial-failure signal)', async () => {
+    // Contrived: job_runs written but retailer_health wasn't updated this run. Retailer STALE surfaces separately.
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', '2026-08-02T14:05:00.000Z'),
+        retailerHealthRow('sprouts', 'OK', '2026-08-02T14:07:00.000Z'),
+      ],
+      error: null,
+    });
+    jobRunsRowsSpy.mockResolvedValueOnce({
+      data: [jobRunRow('2026-08-09T14:10:00.000Z', 'OK', { mapped: 100, skipped: 5, failed: 0 })],
+      error: null,
+    });
+    const health = await computeHealth();
+    expect(health.mapperHistoryStale).toBe(false);
+  });
+
+  it('boundary: exactly 1 hour later is OK, 1 hour + 1 minute is stale', async () => {
+    const jobRunAt = '2026-08-09T14:00:00.000Z';
+    const oneHourLater = '2026-08-09T15:00:00.000Z';
+    const oneHourOneMinLater = '2026-08-09T15:01:00.000Z';
+
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', oneHourLater),
+        retailerHealthRow('sprouts', 'OK', oneHourLater),
+      ],
+      error: null,
+    });
+    jobRunsRowsSpy.mockResolvedValueOnce({
+      data: [jobRunRow(jobRunAt, 'OK', { mapped: 100, skipped: 5, failed: 0 })],
+      error: null,
+    });
+    let health = await computeHealth();
+    expect(health.mapperHistoryStale).toBe(false);
+
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', oneHourOneMinLater),
+        retailerHealthRow('sprouts', 'OK', oneHourOneMinLater),
+      ],
+      error: null,
+    });
+    jobRunsRowsSpy.mockResolvedValueOnce({
+      data: [jobRunRow(jobRunAt, 'OK', { mapped: 100, skipped: 5, failed: 0 })],
+      error: null,
+    });
+    health = await computeHealth();
+    expect(health.mapperHistoryStale).toBe(true);
   });
 });

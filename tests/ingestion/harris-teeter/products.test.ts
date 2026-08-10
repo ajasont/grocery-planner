@@ -22,13 +22,13 @@ describe('searchKrogerProducts', () => {
     });
 
     expect(products).toHaveLength(2);
-    expect(products[0].productId).toBe('0001111041700');
-    expect(products[0].items[0].price.regular).toBe(4.99);
-    expect(products[0].items[0].price.promo).toBe(3.49);
+    expect(products[0]!.productId).toBe('0001111041700');
+    expect(products[0]!.items[0]!.price!.regular).toBe(4.99);
+    expect(products[0]!.items[0]!.price!.promo).toBe(3.49);
 
-    expect(capturedUrl?.searchParams.get('filter.locationId')).toBe('09700123');
-    expect(capturedUrl?.searchParams.get('filter.term')).toBe('chicken');
-    expect(capturedUrl?.searchParams.get('filter.limit')).toBe('50');
+    expect(capturedUrl!.searchParams.get('filter.locationId')).toBe('09700123');
+    expect(capturedUrl!.searchParams.get('filter.term')).toBe('chicken');
+    expect(capturedUrl!.searchParams.get('filter.limit')).toBe('50');
   });
 
   it('throws on non-2xx response', async () => {

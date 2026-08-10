@@ -289,4 +289,29 @@ describe('computeHealth — mapper and history split', () => {
     // No mapper history is not itself a problem — retailers can be OK.
     expect(health.hasProblem).toBe(false);
   });
+
+  it('degrades gracefully when the job_runs read fails (table missing, PostgREST error, etc.)', async () => {
+    // retailer_health read succeeds — retailer statuses should still surface.
+    retailerHealthRowsSpy.mockResolvedValueOnce({
+      data: [
+        retailerHealthRow('harris-teeter', 'OK', new Date().toISOString()),
+        retailerHealthRow('sprouts', 'OK', new Date().toISOString()),
+      ],
+      error: null,
+    });
+    // job_runs read fails (simulates PGRST205 "table not found").
+    jobRunsRowsSpy.mockResolvedValueOnce({
+      data: null as unknown as unknown[],
+      error: { code: 'PGRST205', message: "Could not find the table 'public.job_runs' in the schema cache" },
+    } as unknown as { data: unknown[]; error: null });
+
+    // Should not throw — the page must still render.
+    const health = await computeHealth();
+
+    expect(health.mapper).toBeNull();
+    expect(health.history).toEqual([]);
+    expect(health.retailers).toHaveLength(2);
+    expect(health.retailers.every((r) => r.status === 'OK')).toBe(true);
+    expect(health.hasProblem).toBe(false);
+  });
 });

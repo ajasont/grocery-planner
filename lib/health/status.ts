@@ -114,6 +114,8 @@ export async function computeHealth(): Promise<HealthSnapshot> {
   const healthRows = healthRes.data ?? [];
 
   // Read the newest 5 job_runs; the top row is `mapper`, next 4 are `history`.
+  // Tolerate a read failure here (e.g. PGRST205 if the table is missing) so a
+  // single missing dependency can't take down the whole health page.
   const jobRunsRes = (await supabase
     .from('job_runs')
     .select(
@@ -121,7 +123,9 @@ export async function computeHealth(): Promise<HealthSnapshot> {
     )
     .order('run_at', { ascending: false })
     .limit(5)) as { data: JobRunRow[] | null; error: unknown };
-  if (jobRunsRes.error) throw jobRunsRes.error;
+  if (jobRunsRes.error) {
+    console.warn('job_runs read failed:', jobRunsRes.error);
+  }
   const jobRunRows = jobRunsRes.data ?? [];
 
   const byName = new Map<string, RetailerHealthJoinRow>();

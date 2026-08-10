@@ -5,6 +5,10 @@ import type { RefreshRetailerName } from '@/lib/ingestion/refresh';
 
 export const STALE_THRESHOLD_MS = 8 * 24 * 60 * 60 * 1000;
 
+// Cron writes retailer_health and job_runs in the same request (seconds apart),
+// so any real gap between the newest of each signals a partial-failure divergence.
+export const MAPPER_HISTORY_STALE_MS = 60 * 60 * 1000;
+
 const DISPLAY_NAMES: Record<RefreshRetailerName, string> = {
   'harris-teeter': 'Harris Teeter',
   sprouts: 'Sprouts',
@@ -36,6 +40,9 @@ export type HealthSnapshot = {
   retailers: RetailerStatus[];
   mapper: MapperStatus | null;
   history: MapperStatus[];
+  // True when a retailer refresh landed but the paired job_runs row didn't —
+  // catches silent write-side failures like a dropped table.
+  mapperHistoryStale: boolean;
 };
 
 type RetailerHealthJoinRow = {
@@ -142,9 +149,21 @@ export async function computeHealth(): Promise<HealthSnapshot> {
   const mapper = jobRunRows.length > 0 ? toMapperStatus(jobRunRows[0]) : null;
   const history = jobRunRows.slice(1).map(toMapperStatus);
 
+  const newestRetailerMs = retailers.reduce<number | null>((max, r) => {
+    if (r.lastSuccessAt === null) return max;
+    const ms = new Date(r.lastSuccessAt).getTime();
+    return max === null || ms > max ? ms : max;
+  }, null);
+  const newestJobRunMs = mapper !== null ? new Date(mapper.runAt).getTime() : null;
+  const mapperHistoryStale =
+    newestRetailerMs !== null &&
+    (newestJobRunMs === null ||
+      newestRetailerMs - newestJobRunMs > MAPPER_HISTORY_STALE_MS);
+
   const hasProblem =
     retailers.some((r) => r.status !== 'OK') ||
-    (mapper !== null && mapper.status === 'FAILED');
+    (mapper !== null && mapper.status === 'FAILED') ||
+    mapperHistoryStale;
 
-  return { hasProblem, retailers, mapper, history };
+  return { hasProblem, retailers, mapper, history, mapperHistoryStale };
 }

@@ -115,6 +115,16 @@ export default async function HealthPage() {
 
       <section className="mb-6">
         <h2 className="mb-2 text-lg font-semibold">Mapper</h2>
+        {health.mapperHistoryStale && (
+          <div className="mb-2 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <p className="font-medium">Mapper history missing</p>
+            <p>
+              A retailer refresh landed but no job_runs row was written. The
+              write is best-effort — check that the <code>job_runs</code> table
+              exists in Supabase.
+            </p>
+          </div>
+        )}
         {health.mapper === null ? (
           <p className="text-sm text-neutral-500">
             No runs yet. First scheduled run: Sunday 14:00 UTC.

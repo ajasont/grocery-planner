@@ -7,7 +7,10 @@ function bannerMessage(health: HealthSnapshot): string {
   const mapperFailed =
     health.mapper !== null && health.mapper.status === 'FAILED';
 
-  const problemCount = problemRetailers.length + (mapperFailed ? 1 : 0);
+  const problemCount =
+    problemRetailers.length +
+    (mapperFailed ? 1 : 0) +
+    (health.mapperHistoryStale ? 1 : 0);
 
   if (problemCount >= 2) {
     return 'Refresh problems detected';
@@ -37,6 +40,10 @@ function bannerMessage(health: HealthSnapshot): string {
 
   if (mapperFailed) {
     return 'Ingredient mapping failed on last refresh';
+  }
+
+  if (health.mapperHistoryStale) {
+    return 'Mapper history not being written';
   }
 
   return 'Refresh problem detected';
